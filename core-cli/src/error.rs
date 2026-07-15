@@ -47,6 +47,15 @@ pub enum AppError {
 
     #[error("Argumento inválido: {0}")]
     InvalidArgument(String),
+
+    #[error("Error de XMP: {0}")]
+    XmpParseError(String),
+}
+
+impl From<quick_xml::Error> for AppError {
+    fn from(e: quick_xml::Error) -> Self {
+        AppError::XmpParseError(e.to_string())
+    }
 }
 
 impl AppError {
@@ -67,6 +76,7 @@ impl AppError {
             AppError::RSubprocessFailed(_) => "R_SUBPROCESS_FAILED",
             AppError::IncompleteRanking(_) => "INCOMPLETE_RANKING",
             AppError::InvalidArgument(_) => "INVALID_ARGUMENT",
+            AppError::XmpParseError(_) => "XMP_PARSE_ERROR",
         }
     }
 }

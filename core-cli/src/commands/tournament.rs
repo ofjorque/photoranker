@@ -344,7 +344,7 @@ pub fn result(
 /// una sola transacción por lote, con reintento ante `SQLITE_BUSY` (ver
 /// "Modelo de concurrencia" en conventions.md). Devuelve cuántas filas se
 /// sincronizaron (0 si no había nada pendiente).
-fn flush_pending_sync(conn: &mut Connection, db_path: &Path) -> AppResult<usize> {
+pub(crate) fn flush_pending_sync(conn: &mut Connection, db_path: &Path) -> AppResult<usize> {
     let project_id: String =
         conn.query_row("SELECT project_id FROM project_meta LIMIT 1", [], |r| {
             r.get(0)

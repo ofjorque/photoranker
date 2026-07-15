@@ -1,8 +1,11 @@
 pub mod burst_detect;
 pub mod burst_tournament;
 pub mod cluster;
+pub mod export_xmp;
 pub mod init;
 pub mod prune;
+pub mod resync_global;
+pub mod thumbnails;
 pub mod tournament;
 pub mod variable;
 pub mod variable_tag;

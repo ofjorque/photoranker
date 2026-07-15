@@ -19,7 +19,8 @@ min_global_sample = 20        # mínimo de imágenes en el índice global para u
 variable_null_threshold = 0.20 # si una variable personalizada tiene >20% de NULL entre imágenes activas, se excluye del clustering
 rscript_path = "Rscript"      # override si Rscript.exe no está en PATH, ej. "C:\\Program Files\\R\\R-4.3.0\\bin\\Rscript.exe"
 clustmd_seed = 42              # semilla fija para set.seed() en run_clustmd.R, garantiza resultados deterministas
-theme = "dark"                # tema de la GUI — ver fase5-gui.md
+theme = "dark"                # tema embebido de la GUI ("dark" o "light") — ver fase5-gui.md
+theme_path = ""                # ruta opcional a un .css externo que sobreescribe variables del tema (ej. "~/.photoranker/theme.css"); vacío = sin override
 keyboard_layout = "qwerty"    # layout asumido para atajos de teclado
 ```
 

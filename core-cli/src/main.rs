@@ -11,6 +11,7 @@ mod exif;
 mod phash;
 mod quality;
 mod thumbnail;
+mod xmp;
 
 use clap::{Parser, Subcommand};
 use error::{AppError, AppResult};
@@ -140,6 +141,32 @@ enum Commands {
     TournamentStatus {
         #[arg(long)]
         db: Option<PathBuf>,
+    },
+    /// Lista las imágenes excluidas por falla de extracción de miniatura.
+    #[command(name = "list-failed-thumbnails")]
+    ListFailedThumbnails {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Reintenta la extracción de miniatura/pHash/métricas de una imagen.
+    #[command(name = "retry-thumbnail")]
+    RetryThumbnail {
+        #[arg(long = "image-id")]
+        image_id: i64,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Exporta estrellas/clusters/descartes a sidecars `.xmp` (merge seguro).
+    #[command(name = "export-xmp")]
+    ExportXmp {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Repara `source_db_path` en el índice global tras mover/renombrar una carpeta.
+    #[command(name = "resync-global")]
+    ResyncGlobal {
+        #[arg(long)]
+        path: PathBuf,
     },
 }
 
@@ -298,6 +325,24 @@ fn run(cli: Cli) -> AppResult<Value> {
             let mut conn = db::open_local(&db_path)?;
             commands::tournament::status(&mut conn, &db_path, &cfg)
         }
+        Commands::ListFailedThumbnails { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::thumbnails::list_failed(&conn)
+        }
+        Commands::RetryThumbnail { image_id, db } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::thumbnails::retry(&mut conn, &cfg, image_id)
+        }
+        Commands::ExportXmp { db } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::export_xmp::run(&mut conn, &db_path, &cfg)
+        }
+        Commands::ResyncGlobal { path } => commands::resync_global::run(&path),
     }
 }
 
