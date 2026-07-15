@@ -1,0 +1,178 @@
+// Formas exactas de `data` por comando, verificadas contra core-cli/src
+// (no solo contra la documentación) — ver docs/cli-reference.md.
+
+export interface InitResult {
+  scanned: number;
+  inserted_ok: number;
+  inserted_failed: number;
+  skipped_existing: number;
+}
+
+export interface PruneResult {
+  db_path: string;
+  marked_missing: number;
+}
+
+export interface BurstDetectResult {
+  candidates_considered: number;
+  bursts_created: number;
+  images_grouped: number;
+}
+
+export interface BurstTournamentResult {
+  burst_id: number;
+  representative_image_id: number;
+  rejected: number;
+}
+
+export interface ClusterPreviewResult {
+  bic_by_k: Record<string, number>;
+  [key: string]: unknown;
+}
+
+export interface ClusterCommitResult {
+  clusters?: number;
+  excluded_zero_variance?: string[];
+  excluded_variables?: string[];
+  excluded_solo_categorical?: string;
+  [key: string]: unknown;
+}
+
+export interface ClusterRenameResult {
+  id: number;
+  name: string;
+}
+
+export interface TournamentImage {
+  id: number;
+  file_path: string;
+  mu: number;
+  sigma: number;
+}
+
+export interface TournamentNextResult {
+  group_id: string;
+  images: TournamentImage[];
+}
+
+export interface TournamentUpdatedImage {
+  id: number;
+  rank_position: number;
+  mu: number;
+  sigma: number;
+}
+
+export interface TournamentResultResult {
+  group_id: string;
+  updated: TournamentUpdatedImage[];
+  global_sync: { flushed: number; pending: number };
+}
+
+export interface RankingEntry {
+  id: number;
+  file_path: string;
+  mu: number;
+  sigma: number;
+  rejected: boolean;
+  stalled: boolean;
+}
+
+export type TournamentStopStatus = 'converged' | 'timeout' | 'stalled' | 'in_progress';
+
+export interface TournamentStatusResult {
+  total_images: number;
+  active_images: number;
+  stalled_images: number;
+  converged_images: number;
+  convergence_ratio: number;
+  rounds_completed: number;
+  max_rounds: number;
+  status: TournamentStopStatus;
+}
+
+export interface ExportXmpResult {
+  written: number;
+  excluded_failed_thumbnail: number;
+  excluded_missing: number;
+  mode: 'quantile' | 'fixed_provisional';
+  fallback_fixed_mapping_used: number;
+  stars_breakdown: Record<string, number>;
+}
+
+export interface FailedThumbnail {
+  id: number;
+  file_path: string;
+}
+
+export interface RetryThumbnailResult {
+  id: number;
+  thumbnail_status: 'ok';
+}
+
+export interface ResyncGlobalResult {
+  project_id: string;
+  source_db_path: string;
+  rows_updated: number;
+}
+
+export interface VariableCategory {
+  code: number;
+  label: string;
+}
+
+export interface VariableCreateResult {
+  id: number;
+  name: string;
+  var_type: 'ordinal' | 'nominal';
+  position: number;
+}
+
+export interface UserVariable {
+  id: number;
+  name: string;
+  var_type: 'ordinal' | 'nominal';
+  position: number;
+  min_value: number | null;
+  max_value: number | null;
+  categories: VariableCategory[];
+}
+
+export interface VariableSetResult {
+  variable: string;
+  values_set: number;
+}
+
+export interface QualityMetrics {
+  sharpness: number;
+  brightness: number;
+  contrast: number;
+  overexposed_pct: number;
+  underexposed_pct: number;
+  saturation: number;
+  colorfulness: number;
+  entropy: number;
+  average_r: number;
+  average_g: number;
+  average_b: number;
+  orientation: 'portrait' | 'landscape' | 'square';
+}
+
+export interface GetQualityMetricsResult {
+  id: number;
+  metrics: QualityMetrics | null;
+}
+
+export interface GetThumbnailResult {
+  id: number;
+  thumbnail_b64: string;
+}
+
+export interface BurstImage {
+  id: number;
+  file_path: string;
+}
+
+export interface PendingBurst {
+  id: number;
+  images: BurstImage[];
+}

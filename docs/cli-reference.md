@@ -16,6 +16,9 @@ photoranker prune
 # Detectar ráfagas (basado en pHash, distancia normalizada 0-1)
 photoranker burst-detect --threshold 0.10
 
+# Listar los bursts pendientes de minitorneo, con sus imágenes miembro
+photoranker list-bursts
+
 # Crear una variable personalizada nominal con sus categorías
 photoranker variable-create --name "Presencia de animales" --type nominal --categories "No:0,Sí:1"
 
@@ -75,6 +78,14 @@ photoranker export-xmp --db "C:\Fotos\Boda_Juan\.photoranker.sqlite"
 
 # Reparar source_db_path si una carpeta fue movida/renombrada (cosmético, ver database.md)
 photoranker resync-global --path "D:\Fotos\Boda_Juan"
+
+# --- Fase 5: GUI (ver fase5-gui.md) ---
+
+# Miniatura normalizada en base64 (único punto por el que la GUI recibe bytes de imagen)
+photoranker get-thumbnail --image-id 42
+
+# Métricas objetivas de calidad de una imagen (panel de referencia de la GUI)
+photoranker get-quality-metrics --image-id 42
 ```
 
 ## Ver también

@@ -38,6 +38,16 @@ La GUI debe sentirse diseñada, no un formulario HTML sin estilizar. Esto no es 
 - Si `theme_path` no existe o el archivo no se puede leer, se ignora silenciosamente y se usa solo el tema embebido (no es un error bloqueante — un CSS de usuario mal formado no debe romper la app).
 - No se valida el contenido del CSS del usuario más allá de que el archivo exista y sea legible; si el usuario define una variable con un valor inválido, es su responsabilidad — no se sobre-ingenieriza un validador de CSS para el MVP.
 
+## Acceso a miniaturas y métricas de calidad desde la GUI
+
+Ningún comando de las fases 1-4 exponía los bytes de `images.thumbnail` ni las filas de `image_quality_metrics` por stdout — solo el modo TUI (`variable-tag`) los leía en memoria, directamente sobre la conexión SQLite del propio proceso. Tampoco existía forma de listar los bursts `pending` generados por `burst-detect` (solo se devolvían contadores agregados). Como `conventions.md` prohíbe que la GUI lea `.photoranker.sqlite` directamente, esta fase agrega tres comandos de solo lectura (sin backup, no tocan `mu`/`sigma`/`rejected`/`cluster_id`) para cerrar ese hueco, siguiendo el mismo sobre JSON del resto del CLI:
+
+- `photoranker get-thumbnail --image-id <id>`: `data = {"id": <id>, "thumbnail_b64": "<JPEG en base64>"}`. Devuelve `THUMBNAIL_FAILED` si `thumbnail_status='failed'` (no hay bytes que codificar) e `IMAGE_NOT_FOUND` si el id no existe.
+- `photoranker get-quality-metrics --image-id <id>`: `data = {"id": <id>, "metrics": {...} | null}` (con las columnas de `image_quality_metrics`; `null` si la imagen no tiene fila, ej. si su miniatura falló). `IMAGE_NOT_FOUND` si el id no existe.
+- `photoranker list-bursts`: `data = [{"id": <burst_id>, "images": [{"id": <image_id>, "file_path": "..."}, ...]}, ...]` — solo bursts con `status='pending'` (los `completed` ya fueron resueltos y no vuelven a aparecer), cada uno con sus imágenes miembro ya resueltas por JOIN, para que la GUI arme el minitorneo sin una llamada extra por burst.
+
+La GUI llama a `get-thumbnail` por cada imagen visible en pantalla (torneo, ráfagas, panel de referencia) y decodifica el base64 a un `<img src="data:image/jpeg;base64,...">` o equivalente — nunca abre el `.sqlite` por su cuenta.
+
 ## Checklist de implementación
 
 - [ ] Proponer y documentar (como comentario en el CSS base o un `THEME.md` corto) una dirección de diseño concreta: tipografía, paleta base, y el elemento distintivo elegido.

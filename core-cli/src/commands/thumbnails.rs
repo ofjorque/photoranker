@@ -1,9 +1,12 @@
-//! `list-failed-thumbnails` / `retry-thumbnail` — ver docs/fase1-ingesta.md,
-//! "Fotos con miniatura fallida", y docs/fase4-exportacion.md.
+//! `list-failed-thumbnails` / `retry-thumbnail` / `get-thumbnail` /
+//! `get-quality-metrics` — ver docs/fase1-ingesta.md, "Fotos con miniatura
+//! fallida", docs/fase4-exportacion.md y docs/fase5-gui.md (panel de
+//! referencia de calidad y miniaturas de la GUI).
 
 use crate::config::Config;
 use crate::error::{AppError, AppResult};
 use crate::{exif, phash, quality, thumbnail};
+use base64::Engine;
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use std::io::Cursor;
@@ -121,5 +124,76 @@ pub fn retry(conn: &mut Connection, cfg: &Config, image_id: i64) -> AppResult<Va
     Ok(json!({
         "id": image_id,
         "thumbnail_status": "ok",
+    }))
+}
+
+/// `get-thumbnail --image-id <id>`: única vía por la que la GUI (Tauri)
+/// obtiene los bytes de `images.thumbnail` (JPEG normalizado) sin leer
+/// `.photoranker.sqlite` directamente (ver "API interna" en conventions.md
+/// y docs/fase5-gui.md). Solo lectura, sin backup. Devuelve `THUMBNAIL_FAILED`
+/// si `thumbnail_status='failed'` (no hay bytes que devolver).
+pub fn get_thumbnail(conn: &Connection, image_id: i64) -> AppResult<Value> {
+    let row: Option<(Option<Vec<u8>>, String)> = conn
+        .query_row(
+            "SELECT thumbnail, thumbnail_status FROM images WHERE id = ?1",
+            params![image_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .optional()?;
+    let Some((thumbnail, status)) = row else {
+        return Err(AppError::ImageNotFound(image_id));
+    };
+    let Some(bytes) = thumbnail.filter(|_| status == "ok") else {
+        return Err(AppError::ThumbnailFailed(image_id));
+    };
+
+    Ok(json!({
+        "id": image_id,
+        "thumbnail_b64": base64::engine::general_purpose::STANDARD.encode(bytes),
+    }))
+}
+
+/// `get-quality-metrics --image-id <id>`: expone `image_quality_metrics`
+/// para el panel de referencia de calidad de la GUI (ver fase1-ingesta.md
+/// sección 2, fase5-gui.md checklist). Solo lectura, sin backup.
+pub fn get_quality_metrics(conn: &Connection, image_id: i64) -> AppResult<Value> {
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM images WHERE id = ?1)",
+        params![image_id],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        return Err(AppError::ImageNotFound(image_id));
+    }
+
+    let metrics = conn
+        .query_row(
+            "SELECT sharpness, brightness, contrast, overexposed_pct, underexposed_pct, \
+             saturation, colorfulness, entropy, average_r, average_g, average_b, orientation \
+             FROM image_quality_metrics WHERE image_id = ?1",
+            params![image_id],
+            |r| {
+                Ok(json!({
+                    "sharpness": r.get::<_, f64>(0)?,
+                    "brightness": r.get::<_, f64>(1)?,
+                    "contrast": r.get::<_, f64>(2)?,
+                    "overexposed_pct": r.get::<_, f64>(3)?,
+                    "underexposed_pct": r.get::<_, f64>(4)?,
+                    "saturation": r.get::<_, f64>(5)?,
+                    "colorfulness": r.get::<_, f64>(6)?,
+                    "entropy": r.get::<_, f64>(7)?,
+                    "average_r": r.get::<_, u8>(8)?,
+                    "average_g": r.get::<_, u8>(9)?,
+                    "average_b": r.get::<_, u8>(10)?,
+                    "orientation": r.get::<_, String>(11)?,
+                }))
+            },
+        )
+        .optional()?
+        .unwrap_or(Value::Null);
+
+    Ok(json!({
+        "id": image_id,
+        "metrics": metrics,
     }))
 }

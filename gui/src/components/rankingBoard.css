@@ -1,0 +1,113 @@
+/* Tablero de ranking por teclado (torneo principal + minitorneo de ráfagas —
+   misma mecánica, ver docs/fase3-torneo.md "Interacción por Teclado").
+   Elemento distintivo del sistema (ver THEME.md): la transición de foco. */
+
+.ranking-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: calc(var(--spacing-unit) * 2);
+}
+
+.ranking-card {
+  position: relative;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.22s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), transform 0.12s ease;
+}
+
+.ranking-card:hover {
+  transform: translateY(-2px);
+}
+
+.ranking-card.focused {
+  border-color: var(--color-focus-border);
+  box-shadow: var(--focus-halo);
+}
+
+.ranking-card .thumb-wrap {
+  aspect-ratio: 4 / 3;
+  background: var(--color-bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+.ranking-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.ranking-card .thumb-placeholder {
+  color: var(--color-text-muted);
+  font-size: 11px;
+}
+
+.ranking-card .meta {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+.position-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-success);
+  color: #04140c;
+  font-weight: 700;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-sm);
+}
+
+.position-badge.tie {
+  background: var(--color-tie-badge);
+  color: #221200;
+  animation: tie-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes tie-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(240, 160, 48, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(240, 160, 48, 0);
+  }
+}
+
+.ranking-board-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-unit);
+  flex-wrap: wrap;
+}
+
+.ranking-hint {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+.ranking-hint kbd {
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: inherit;
+  font-size: 11px;
+}

@@ -115,3 +115,43 @@ pub fn run(conn: &mut Connection, threshold: f64) -> AppResult<serde_json::Value
         "images_grouped": images_grouped,
     }))
 }
+
+/// `list-bursts`: solo lectura, sin backup (igual que `list-failed-thumbnails`
+/// — no está en la lista de comandos que disparan `db::backup`, ver checklist
+/// de fase1-ingesta.md). Devuelve los bursts `pending` (los `completed` ya
+/// fueron resueltos por `burst-tournament` y no necesitan volver a mostrarse)
+/// junto con sus imágenes miembro, para que la GUI pueda armar el minitorneo
+/// sin tener que hacer una llamada aparte por burst (ver fase5-gui.md).
+pub fn list_pending(conn: &Connection) -> AppResult<serde_json::Value> {
+    let mut burst_stmt = conn.prepare("SELECT id FROM bursts WHERE status = 'pending'")?;
+    let burst_ids: Vec<i64> = burst_stmt
+        .query_map([], |r| r.get(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(burst_stmt);
+
+    let mut member_stmt = conn.prepare(
+        "SELECT images.id, images.file_path FROM burst_members
+         JOIN images ON images.id = burst_members.image_id
+         WHERE burst_members.burst_id = ?1
+         ORDER BY images.id",
+    )?;
+
+    let bursts: Vec<serde_json::Value> = burst_ids
+        .into_iter()
+        .map(|burst_id| {
+            let members: Vec<serde_json::Value> = member_stmt
+                .query_map(params![burst_id], |r| {
+                    Ok(json!({
+                        "id": r.get::<_, i64>(0)?,
+                        "file_path": r.get::<_, String>(1)?,
+                    }))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+            Ok(json!({ "id": burst_id, "images": members }))
+        })
+        .collect::<AppResult<Vec<_>>>()?;
+
+    Ok(json!(bursts))
+}

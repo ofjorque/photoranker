@@ -1,0 +1,28 @@
+/* Tema embebido oscuro (default) — ver THEME.md y docs/fase5-gui.md.
+   Tokens mínimos con nombres exactos del spec + extensiones del sistema. */
+:root {
+  --color-bg: #0f0f14;
+  --color-surface: #1a1a24;
+  --color-surface-raised: #21212e;
+  --color-accent: #7c6fff;
+  --color-accent-soft: rgba(124, 111, 255, 0.18);
+  --color-text: #e8e8ec;
+  --color-text-muted: #9a9aa5;
+  --color-border: #2c2c3a;
+  --color-tie-badge: #f0a030;
+  --color-focus-border: #4a90ff;
+  --color-danger: #e55a6a;
+  --color-success: #3ecf8e;
+
+  --font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --spacing-unit: 8px;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  --focus-halo: 0 0 0 3px var(--color-focus-border, #4a90ff),
+    0 0 24px 4px rgba(74, 144, 255, 0.45);
+}

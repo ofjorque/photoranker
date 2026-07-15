@@ -45,6 +45,12 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Lista los bursts pendientes de minitorneo, con sus imágenes miembro.
+    #[command(name = "list-bursts")]
+    ListBursts {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Resuelve el minitorneo de una ráfaga (formato id:posición).
     #[command(name = "burst-tournament")]
     BurstTournament {
@@ -156,6 +162,24 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Devuelve la miniatura normalizada (JPEG, base64) de una imagen — único
+    /// punto por el que la GUI recibe bytes de imagen, ver docs/fase5-gui.md.
+    #[command(name = "get-thumbnail")]
+    GetThumbnail {
+        #[arg(long = "image-id")]
+        image_id: i64,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Devuelve las métricas objetivas de calidad de una imagen (panel de
+    /// referencia de la GUI, ver docs/fase1-ingesta.md sección 2).
+    #[command(name = "get-quality-metrics")]
+    GetQualityMetrics {
+        #[arg(long = "image-id")]
+        image_id: i64,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Exporta estrellas/clusters/descartes a sidecars `.xmp` (merge seguro).
     #[command(name = "export-xmp")]
     ExportXmp {
@@ -225,6 +249,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let mut conn = db::open_local(&db_path)?;
             commands::burst_detect::run(&mut conn, threshold.unwrap_or(cfg.burst_threshold))
+        }
+        Commands::ListBursts { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::burst_detect::list_pending(&conn)
         }
         Commands::BurstTournament {
             burst_id,
@@ -335,6 +364,16 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let mut conn = db::open_local(&db_path)?;
             commands::thumbnails::retry(&mut conn, &cfg, image_id)
+        }
+        Commands::GetThumbnail { image_id, db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::thumbnails::get_thumbnail(&conn, image_id)
+        }
+        Commands::GetQualityMetrics { image_id, db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::thumbnails::get_quality_metrics(&conn, image_id)
         }
         Commands::ExportXmp { db } => {
             let cfg = config::load_or_init()?;
