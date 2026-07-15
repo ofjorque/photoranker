@@ -102,7 +102,7 @@ pub fn next(conn: &mut Connection) -> AppResult<Value> {
     let priority_ordered: Vec<Candidate> = {
         let mut stmt = conn.prepare(
             "SELECT id, mu FROM images \
-             WHERE rejected = 0 AND stalled = 0 AND missing = 0 \
+             WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND thumbnail_status = 'ok' \
              ORDER BY sigma DESC, \
                       CASE WHEN last_compared_at IS NULL THEN 0 ELSE 1 END ASC, \
                       last_compared_at ASC",
@@ -449,7 +449,8 @@ pub fn status(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<
             r.get(0)
         })?;
     let active_count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM images WHERE rejected = 0 AND stalled = 0 AND missing = 0",
+        "SELECT COUNT(*) FROM images \
+         WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND thumbnail_status = 'ok'",
         [],
         |r| r.get(0),
     )?;
@@ -459,7 +460,8 @@ pub fn status(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<
         })?;
     let converged_count: i64 = conn.query_row(
         "SELECT COUNT(*) FROM images \
-         WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND sigma < ?1",
+         WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND thumbnail_status = 'ok' \
+           AND sigma < ?1",
         params![cfg.sigma_stop_threshold],
         |r| r.get(0),
     )?;

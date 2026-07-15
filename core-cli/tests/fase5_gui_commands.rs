@@ -160,6 +160,54 @@ fn list_bursts_returns_pending_bursts_with_members_and_omits_completed() {
 }
 
 #[test]
+fn tournament_next_and_status_exclude_failed_thumbnails() {
+    // Regresión: tournament-next/tournament-status no filtraban
+    // thumbnail_status, así que fotos con miniatura fallida (comunes con RAW
+    // no soportados por rawloader, ver fase1-ingesta.md sección 3) terminaban
+    // en el torneo con mu/sigma default para siempre — nunca convergen ni se
+    // comparan, contaminando "activas"/convergencia. Ver fase3-torneo.md,
+    // "Queda excluida de torneos... hasta resolverse manualmente".
+    let tmp = TempDir::new("fase5_thumb_status");
+    let folder = &tmp.0;
+    write_solid_jpeg(&folder.join("a.jpg"), 100);
+    write_solid_jpeg(&folder.join("b.jpg"), 150);
+    std::fs::write(folder.join("broken.jpg"), b"no es una imagen valida").unwrap();
+
+    let db_path = folder.join(".photoranker.sqlite");
+    let db_arg = db_path.to_string_lossy().to_string();
+    let path_arg = folder.to_string_lossy().to_string();
+
+    let init_result = run_cli(&["init", "--path", &path_arg]);
+    assert_eq!(init_result["data"]["inserted_ok"], 2);
+    assert_eq!(init_result["data"]["inserted_failed"], 1);
+
+    let status = run_cli(&["tournament-status", "--db", &db_arg]);
+    assert_eq!(status["status"], "ok", "tournament-status falló: {status}");
+    assert_eq!(
+        status["data"]["active_images"], 2,
+        "la imagen con miniatura fallida no debe contar como activa"
+    );
+
+    let next = run_cli(&["tournament-next", "--db", &db_arg]);
+    assert_eq!(next["status"], "ok", "tournament-next falló: {next}");
+    let images = next["data"]["images"]
+        .as_array()
+        .expect("con 2 imágenes ok debe formarse un grupo");
+    assert_eq!(
+        images.len(),
+        2,
+        "solo las 2 imágenes ok deben entrar al grupo"
+    );
+    for img in images {
+        let name = img["file_path"].as_str().unwrap();
+        assert!(
+            !name.contains("broken"),
+            "broken.jpg no debe aparecer en un grupo de torneo: {name}"
+        );
+    }
+}
+
+#[test]
 fn get_thumbnail_reports_image_not_found() {
     let tmp = TempDir::new("fase5_error");
     let folder = &tmp.0;
