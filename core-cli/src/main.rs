@@ -114,6 +114,33 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Arma el siguiente grupo de comparación del torneo principal.
+    #[command(name = "tournament-next")]
+    TournamentNext {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Envía el resultado de un grupo (formato id:posición, permite empates).
+    #[command(name = "tournament-result")]
+    TournamentResult {
+        #[arg(long = "group-id")]
+        group_id: String,
+        #[arg(long, num_args = 1.., required = true)]
+        ranking: Vec<String>,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Ranking en vivo por mu descendente (desempate: sigma asc, luego id).
+    Ranking {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Progreso de la sesión de torneo y motivo de parada.
+    #[command(name = "tournament-status")]
+    TournamentStatus {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
 }
 
 fn parse_id_number_pairs(raw: &[String], arg_name: &str) -> AppResult<Vec<(i64, f64)>> {
@@ -240,6 +267,36 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let mut conn = db::open_local(&db_path)?;
             commands::cluster::rename(&mut conn, id, &name)
+        }
+        Commands::TournamentNext { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::tournament::next(&mut conn)
+        }
+        Commands::TournamentResult {
+            group_id,
+            ranking,
+            db,
+        } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            let pairs = parse_id_number_pairs(&ranking, "ranking")?
+                .into_iter()
+                .map(|(id, pos)| (id, pos as i64))
+                .collect::<Vec<_>>();
+            commands::tournament::result(&mut conn, &db_path, &cfg, &group_id, &pairs)
+        }
+        Commands::Ranking { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::tournament::ranking(&mut conn, &db_path)
+        }
+        Commands::TournamentStatus { db } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::tournament::status(&mut conn, &db_path, &cfg)
         }
     }
 }

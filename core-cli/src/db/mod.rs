@@ -17,6 +17,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("../../../migrations/004_variables.sql")),
         M::up(include_str!("../../../migrations/005_clustering.sql")),
         M::up(include_str!("../../../migrations/006_tournament.sql")),
+        M::up(include_str!("../../../migrations/007_tournament_sync.sql")),
     ])
 });
 
@@ -95,6 +96,14 @@ pub fn open_global() -> AppResult<Connection> {
 /// o escriba en el índice global.
 pub fn backup(conn: &Connection, db_path: &Path) -> AppResult<()> {
     let backup_path = format!("{}.bak", db_path.display());
+    // `VACUUM INTO` exige que el destino no exista todavía; como este backup
+    // es un único snapshot rotativo (no un historial), se descarta el
+    // anterior antes de escribir el nuevo — si no, cualquier segundo comando
+    // mutante sobre la misma BD (ej. dos tournament-result seguidos) fallaría
+    // siempre con "output file already exists".
+    if Path::new(&backup_path).exists() {
+        std::fs::remove_file(&backup_path)?;
+    }
     conn.execute("VACUUM INTO ?1", [backup_path])?;
     Ok(())
 }
