@@ -1,0 +1,41 @@
+# Fase 2 — Clustering (R)
+
+> Ver también: `database.md` (tablas `user_variables`, `variable_categories`, `image_variable_values`, `clusters`, `image_clusters`), `conventions.md` (WAL, escaping de rutas), `config.md` (`cluster_min/max`, `variable_null_threshold`, `clustmd_seed`).
+
+## Agrupación por Clases Latentes Personalizable (clustMD en R)
+
+En lugar de IA opaca, usamos estadística de variables mixtas. Rust llama a R como subproceso para agrupar tus fotos según:
+
+- **Metadatos EXIF**: `iso`, `aperture`, `focal_length` (variables continuas; `shutter_speed` y `lens` se excluyen del clustering en el MVP — ver estructura de `exif_json` en `database.md`).
+- **Métricas objetivas de calidad**: nitidez, brillo, contraste, clipping, saturación, colorido, entropía y color promedio (variables continuas), más orientación (categórica) — ver `fase1-ingesta.md`.
+- **Criterio Personalizado**: variables ordinales (sliders) o nominales (switches) que el usuario define en la UI, y cuyos valores asigna manualmente por imagen (vía `variable-create`/`variable-set`/`variable-tag`, ver `fase1-ingesta.md`). Las variables nominales se codifican como enteros (`code`) mapeados a etiquetas legibles mediante la tabla `variable_categories`, y se convierten a `factor()` en R antes de correr `clustMD`. Ejemplos típicos: "Presencia de animales" (nominal: `No=0`, `Sí=1`), "Es paisaje" (nominal: `No=0`, `Sí=1`), "Grado de nostalgia" (ordinal: escala 1–5).
+
+**Orden de ejecución y `NULL`s:** `cluster` **no requiere** haber corrido `variable-tag` antes — es válido clusterizar solo con EXIF + métricas objetivas. Si se ejecuta con variables personalizadas parcialmente etiquetadas: (a) toda variable con más de `variable_null_threshold` (default 20%, ver `config.md`) de `NULL` entre las imágenes activas se **excluye por completo** de esa corrida de clustering (se reporta en la salida JSON como `excluded_variables`); (b) para las variables que sí se incluyen, las imágenes con `NULL` en alguna de ellas se excluyen del ajuste del modelo (listwise deletion) y quedan con `cluster_id = NULL` — no se hace imputación. Esto es intencionalmente simple: mejor recomendar etiquetar antes de clusterizar que resolver `NULL`s con heurísticas adicionales.
+
+**Selección del número de clusters (estilo scree/BIC):**
+
+- `photoranker cluster --preview`: corre `clustMD` internamente para un rango de G (ej. 2 a 10, `cluster_min`/`cluster_max` en `config.md`) y devuelve el BIC de cada uno, sin comprometer resultados. La GUI puede graficar esto como un scree plot (ver `fase5-gui.md`).
+- `photoranker cluster --k <N>`: compromete el clustering con el número de clusters elegido manualmente por el usuario.
+- Si se ejecuta `photoranker cluster` sin `--k`, se usa automáticamente el mínimo BIC como fallback.
+
+El motor inyecta los clusters como etiquetas planas (no jerárquicas) en `dc:subject` del XMP (ver `fase4-exportacion.md`).
+
+## Interfaz con R (clustMD)
+
+- **Llamada**: Rust invoca el ejecutable de R vía `std::process::Command`, usando la ruta de `rscript_path` en `config.toml` (default `"Rscript"`, resuelto contra el PATH del sistema; el usuario puede sobreescribirlo con una ruta absoluta si `Rscript.exe` no está en el PATH). **La ruta a la base de datos se pasa con `.arg(db_path)` como un elemento separado del array de argumentos** (nunca concatenando un string tipo `format!("{} {}", script, db_path)`), para que `std::process::Command` maneje automáticamente el escaping de espacios y caracteres especiales en rutas de Windows (ej. `C:\Mis Fotos\Boda Juan\.photoranker.sqlite`).
+- **Entrada**: la base de datos SQLite local con las tablas `images`, `image_quality_metrics`, `image_variable_values`, `user_variables`, `variable_categories`. **El script debe leer `images` filtrando explícitamente `WHERE rejected = 0 AND missing = 0`** — las imágenes rechazadas en un burst o borradas del disco nunca deben entrar a la matriz de `clustMD` (para las rechazadas, de todos modos recibirán su `cluster_id` heredado del ganador del burst en `export-xmp`, no por haber participado ellas mismas del clustering).
+- **Procesamiento**: `run_clustmd.R` empieza con `set.seed(clustmd_seed)` (valor fijo, default `42`, ver `config.md`) — esto es **obligatorio** porque `clustMD` ajusta un modelo de mezcla vía EM con inicialización estocástica; sin semilla fija, dos corridas de `cluster --k 4` sobre los mismos datos podrían converger a asignaciones de cluster distintas, violando el principio de determinismo del proyecto (ver `architecture.md`). Luego el script construye una matriz de datos mixtos leyendo directamente las columnas `images.iso`/`images.aperture`/`images.focal_length` (dedicadas, no requiere parsear `exif_json`), las métricas objetivas de calidad continuas (`sharpness`, `brightness`, `contrast`, `overexposed_pct`, `underexposed_pct`, `saturation`, `colorfulness`, `entropy`, `average_r/g/b`), la variable categórica fija `orientation`, más las variables personalizadas (ordenadas por `user_variables.position`). **Todas las variables continuas se estandarizan (z-score) antes de correr el modelo** — esto es obligatorio, porque las escalas son muy dispares (ISO va de 100 a 25.600; `brightness` de 0 a 255; `sharpness` de 0 a miles) y sin estandarizar las variables de mayor magnitud dominarían el clustering. **Caso de varianza cero**: si una columna tiene `sd == 0` (ej. todas las fotos de la carpeta comparten el mismo `orientation` o el mismo ISO fijo), estandarizarla causaría división por cero (`NaN`). El script debe detectar esto explícitamente y **excluir esa columna del modelo** (no asignarle 0 silenciosamente, para evitar que una columna constante distorsione las distancias); se reporta en la salida JSON como `excluded_zero_variance`. Las variables nominales (tanto `orientation` como las personalizadas) se convierten a `factor()`; las personalizadas usan `variable_categories` para el mapeo de etiquetas. Los valores `NULL` (imágenes sin etiquetar) se tratan como faltantes. Sin `--k`, ejecuta `clustMD` para un rango de G (2–10 por defecto) y selecciona el mínimo BIC; con `--k`, ejecuta directamente con ese número de clusters. Escribe los resultados en `clusters` e `image_clusters`, y actualiza `images.cluster_id` (argmax de probabilidad) para acceso rápido.
+
+  **Límite de escalabilidad conocido (no resuelto en el MVP)**: `clustMD` es un ajuste EM sobre variables mixtas y puede volverse lento o tener problemas de convergencia con N grande (varios miles de filas) combinado con muchas variables (~13 en el diseño actual). Para los volúmenes típicos de este proyecto (unos pocos miles de fotos por carpeta) es aceptable; si en el futuro se usa con bibliotecas mucho más grandes, esto es un cuello de botella conocido y documentado, no algo que el MVP intente resolver con muestreo o aproximaciones — se deja como mejora futura explícita si llega a doler en la práctica.
+- **Salida**: JSON en stdout. Modo preview: `{"status":"ok","bic_by_k":{"2":-412.3,"3":-398.1,...}}`. Modo commit: `{"status":"ok","clusters":4}`. La comunicación se da directamente a través del archivo SQLite, sin archivos CSV intermedios.
+
+## Checklist de implementación
+
+- [ ] Escribir `run_clustmd.R` siguiendo esta especificación (variables continuas EXIF + métricas objetivas + ordinales/nominales vía `variable_categories`). **Estandarizar (z-score) todas las variables continuas** antes de correr el modelo, con manejo de varianza cero.
+- [ ] Implementar `cluster --preview` (rango de k, devuelve BIC por k) y `cluster --k <N>` (commit).
+- [ ] Poblar `clusters`, `image_clusters`, actualizar `images.cluster_id` (argmax de probabilidad).
+- [ ] Implementar `cluster-rename --id <N> --name "<nombre>"` para que el usuario bautice los clusters (que `clustMD` devuelve numerados) antes de exportarlos como tags en `dc:subject`.
+
+## Siguiente fase
+
+`fase3-torneo.md`
