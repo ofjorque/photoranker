@@ -10,6 +10,18 @@ Luego calcula el Hashing Perceptual (pHash) sobre esa miniatura ya normalizada: 
 
 **`init` es incremental e idempotente**: correrlo de nuevo sobre una carpeta ya inicializada (ej. porque agregaste 200 fotos nuevas) **no destruye nada**. Solo inserta las imágenes cuyo `file_path` aún no existe en `images` (con `mu`/`sigma` por defecto), y deja intactas las ya existentes junto con sus `mu`, `sigma`, `rejected`, clusters y valores de variables. **`init` nunca borra ni marca nada** — solo agrega.
 
+### RAW + JPEG del mismo disparo cuentan como 1 sola foto (agregado en Fase 5 por feedback de uso real)
+
+Muchas cámaras disparan en modo RAW+JPEG simultáneo. Sin tratamiento especial, esas dos versiones del mismo disparo entrarían al torneo como si fueran fotos distintas — decisión de arquitectura corregida tras probar la GUI contra una biblioteca real. Dentro de una misma corrida de `init`, dos archivos nuevos (ninguno de los dos ya presente en `images.file_path` ni `images.paired_path`) que comparten **carpeta y nombre base sin extensión** (case-insensitive) y donde uno es RAW (`cr2`/`cr3`/`nef`/`arw`/`rw2`/`orf`/`dng`/`pef`/`raf`) y el otro JPEG (`jpg`/`jpeg`) se fusionan en **una sola fila** de `images`:
+
+- `file_path` = el archivo RAW (el "maestro").
+- `paired_path` = el archivo JPEG (`NULL` si la imagen no tiene par — caso normal).
+- La miniatura/pHash/métricas de calidad se extraen **del JPEG**, no del RAW — más rápido y más confiable que decodificar el RAW con `rawloader` (que además no soporta bien contenedores modernos como CR3, ver sección 3 abajo). El EXIF (`iso`/`aperture`/`focal_length`) se lee primero del RAW; si no trae nada legible, se completa desde el JPEG.
+- **Sin fusión retroactiva**: si uno de los dos archivos ya existía como fila individual de una corrida anterior de `init`, el otro se inserta como fila nueva independiente, sin fusionar — fusionar retroactivamente implicaría borrar/reescribir una fila ya existente (con su `mu`/`sigma`/`rejected` acumulados), lo que rompería la garantía de idempotencia de `init`. Limitación aceptada y documentada, igual que el caso de renombrados en `prune`.
+- **Casos ambiguos** (3+ archivos con el mismo nombre base en la misma carpeta, ej. dos RAW de formatos distintos) no se fusionan — cada archivo queda como fila independiente, para no tener que adivinar cuál es la pareja correcta.
+- `export-xmp` escribe un sidecar `.xmp` para **cada uno** de los dos archivos del par, con idéntico rating/label/cluster (ver `fase4-exportacion.md`).
+- El JSON de `init` reporta `paired_raw_jpeg` (cuántos pares se fusionaron en esta corrida) además de `scanned` (cuenta archivos crudos, no filas) e `inserted_ok`/`inserted_failed` (cuentan filas lógicas).
+
 ### Fotos borradas o renombradas (`photoranker prune`)
 
 `init` no detecta archivos que desaparecieron de la carpeta (borrados o renombrados fuera de PhotoRanker) — para eso existe un comando separado, `prune`, con responsabilidad única:

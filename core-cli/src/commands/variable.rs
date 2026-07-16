@@ -167,3 +167,36 @@ pub fn set(
         "values_set": values.len(),
     }))
 }
+
+/// `get-variable-values --variable <name>`: solo lectura, sin backup —
+/// devuelve el valor actual (o `null` si nunca se asignó) de una variable
+/// para cada imagen activa (`rejected=0 AND missing=0`, mismo criterio que
+/// entra a `clustMD`, ver fase2-clustering.md). Existe para que la GUI pueda
+/// mostrar/editar valores foto por foto (ver fase5-gui.md, "clasificación
+/// visual") sin tener que adivinar qué imágenes ya están etiquetadas — antes
+/// de este comando no había forma de leer `image_variable_values` por fuera
+/// del modo TUI `variable-tag`.
+pub fn get_values(conn: &Connection, variable_name: &str) -> AppResult<serde_json::Value> {
+    let (variable_id, _var_type, _min, _max) = find_variable(conn, variable_name)?;
+
+    let mut stmt = conn.prepare(
+        "SELECT images.id, images.file_path, v.value \
+         FROM images \
+         LEFT JOIN image_variable_values v \
+           ON v.image_id = images.id AND v.variable_id = ?1 \
+         WHERE images.rejected = 0 AND images.missing = 0 \
+         ORDER BY images.id",
+    )?;
+    let rows: Vec<serde_json::Value> = stmt
+        .query_map(params![variable_id], |row| {
+            Ok(json!({
+                "id": row.get::<_, i64>(0)?,
+                "file_path": row.get::<_, String>(1)?,
+                "value": row.get::<_, Option<f64>>(2)?,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(json!(rows))
+}

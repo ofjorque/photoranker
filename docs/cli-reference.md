@@ -34,6 +34,9 @@ photoranker variable-set --variable "Grado de nostalgia" --values 42:4 17:2 58:5
 # Modo TUI: asignar una variable recorriendo las imágenes por teclado (ver miniaturas)
 photoranker variable-tag --variable "Grado de nostalgia"
 
+# Ver el valor actual de una variable por imagen activa (para edición visual en la GUI)
+photoranker get-variable-values --variable "Grado de nostalgia"
+
 # Minitorneo de ráfaga (formato id:posición, permite empates)
 photoranker burst-tournament --burst-id 1 --ranking 12:1 8:2 4:3
 
@@ -47,6 +50,9 @@ photoranker cluster --k 4
 
 # Renombrar un cluster antes de exportarlo como tag
 photoranker cluster-rename --id 3 --name "Retratos nocturnos"
+
+# Listar clusters comprometidos con sus fotos más representativas (mayor probability)
+photoranker list-clusters
 
 # --- Fase 3: Torneo principal (ver fase3-torneo.md) ---
 

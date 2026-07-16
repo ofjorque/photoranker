@@ -19,6 +19,7 @@ static MIGRATIONS: LazyLock<Migrations<'static>> = LazyLock::new(|| {
         M::up(include_str!("../../../migrations/006_tournament.sql")),
         M::up(include_str!("../../../migrations/007_tournament_sync.sql")),
         M::up(include_str!("../../../migrations/008_tournament_undo.sql")),
+        M::up(include_str!("../../../migrations/009_raw_jpeg_pairing.sql")),
     ])
 });
 

@@ -6,9 +6,14 @@
 use crate::config::Config;
 use crate::error::{AppError, AppResult};
 use rusqlite::{Connection, params};
-use serde_json::Value;
+use serde_json::{Value, json};
 use std::path::Path;
 use std::process::Command;
+
+/// Cuántas imágenes representativas devolver por cluster en `list-clusters`
+/// (ver fase5-gui.md, "mostrar unas 3 o 4 fotos más representativas de cada
+/// cluster para etiquetarlo").
+const REPRESENTATIVE_IMAGES_PER_CLUSTER: usize = 4;
 
 /// Ruta al script R, resuelta en tiempo de compilación relativa al crate
 /// (mismo patrón que `include_str!` usa para las migraciones en `db/mod.rs`).
@@ -175,4 +180,87 @@ pub fn rename(conn: &mut Connection, id: i64, name: &str) -> AppResult<Value> {
         return Err(AppError::ClusterNotFound(id));
     }
     Ok(serde_json::json!({ "id": id, "name": name }))
+}
+
+/// `list-clusters`: solo lectura, sin backup — devuelve cada cluster ya
+/// comprometido (`cluster --k`) junto con sus `member_count` y hasta
+/// `REPRESENTATIVE_IMAGES_PER_CLUSTER` imágenes de mayor `probability`
+/// (argmax de pertenencia), para que la GUI pueda mostrarlas y ayudar a
+/// elegir el nombre antes de `cluster-rename` (ver fase5-gui.md).
+/// (cluster_id, cluster_name, image_id, probability, file_path)
+type ClusterMemberRow = (i64, Option<String>, i64, Option<f64>, String);
+
+pub fn list(conn: &Connection) -> AppResult<Value> {
+    let mut stmt = conn.prepare(
+        "SELECT c.id, c.name, ic.image_id, ic.probability, i.file_path \
+         FROM clusters c \
+         JOIN image_clusters ic ON ic.cluster_id = c.id \
+         JOIN images i ON i.id = ic.image_id \
+         ORDER BY c.id, ic.probability DESC, ic.image_id ASC",
+    )?;
+    let rows: Vec<ClusterMemberRow> = stmt
+        .query_map([], |r| {
+            Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(stmt);
+
+    let mut clusters: Vec<Value> = Vec::new();
+    let mut current_id: Option<i64> = None;
+    let mut current_name: Option<String> = None;
+    let mut current_images: Vec<Value> = Vec::new();
+    let mut current_count: usize = 0;
+
+    fn push_cluster(
+        clusters: &mut Vec<Value>,
+        id: i64,
+        name: &Option<String>,
+        images: &[Value],
+        count: usize,
+    ) {
+        clusters.push(json!({
+            "id": id,
+            "name": name,
+            "member_count": count,
+            "representative_images": images,
+        }));
+    }
+
+    for (cluster_id, name, image_id, probability, file_path) in rows {
+        if current_id != Some(cluster_id) {
+            if let Some(id) = current_id {
+                push_cluster(
+                    &mut clusters,
+                    id,
+                    &current_name,
+                    &current_images,
+                    current_count,
+                );
+            }
+            current_id = Some(cluster_id);
+            current_name = name;
+            current_images = Vec::new();
+            current_count = 0;
+        }
+        current_count += 1;
+        if current_images.len() < REPRESENTATIVE_IMAGES_PER_CLUSTER {
+            current_images.push(json!({
+                "id": image_id,
+                "file_path": file_path,
+                "probability": probability,
+            }));
+        }
+    }
+    if let Some(id) = current_id {
+        push_cluster(
+            &mut clusters,
+            id,
+            &current_name,
+            &current_images,
+            current_count,
+        );
+    }
+
+    Ok(json!(clusters))
 }

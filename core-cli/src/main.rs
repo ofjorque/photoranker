@@ -94,6 +94,14 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Devuelve el valor actual de una variable para cada imagen activa.
+    #[command(name = "get-variable-values")]
+    GetVariableValues {
+        #[arg(long)]
+        variable: String,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Modo TUI: asigna una variable recorriendo las imágenes por teclado.
     #[command(name = "variable-tag")]
     VariableTag {
@@ -108,6 +116,12 @@ enum Commands {
         preview: bool,
         #[arg(long)]
         k: Option<u32>,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Lista los clusters comprometidos con sus imágenes más representativas.
+    #[command(name = "list-clusters")]
+    ListClusters {
         #[arg(long)]
         db: Option<PathBuf>,
     },
@@ -314,6 +328,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             let pairs = parse_id_number_pairs(&values, "values")?;
             commands::variable::set(&mut conn, &variable, &pairs)
         }
+        Commands::GetVariableValues { variable, db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::variable::get_values(&conn, &variable)
+        }
         Commands::VariableTag { variable, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let mut conn = db::open_local(&db_path)?;
@@ -333,6 +352,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             } else {
                 commands::cluster::commit(&mut conn, &db_path, &cfg, k)
             }
+        }
+        Commands::ListClusters { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::cluster::list(&conn)
         }
         Commands::ClusterRename { id, name, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;

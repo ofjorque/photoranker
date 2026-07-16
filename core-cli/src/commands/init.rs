@@ -10,13 +10,15 @@ use std::io::Cursor;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
-const SUPPORTED_EXTENSIONS: &[&str] = &[
-    "jpg", "jpeg", "png", "tif", "tiff", "heic", "heif", "cr2", "cr3", "nef", "arw", "rw2", "orf",
-    "dng", "pef", "raf",
+const RAW_EXTENSIONS: &[&str] = &[
+    "cr2", "cr3", "nef", "arw", "rw2", "orf", "dng", "pef", "raf",
 ];
+const JPEG_EXTENSIONS: &[&str] = &["jpg", "jpeg"];
+const OTHER_SUPPORTED_EXTENSIONS: &[&str] = &["png", "tif", "tiff", "heic", "heif"];
 
 struct ProcessedFile {
     file_path: String,
+    paired_path: Option<String>,
     thumbnail_bytes: Option<Vec<u8>>,
     thumbnail_status: &'static str,
     hash: Option<String>,
@@ -27,11 +29,18 @@ struct ProcessedFile {
     quality: Option<quality::QualityMetrics>,
 }
 
-fn is_supported(path: &Path) -> bool {
+fn extension_of(path: &Path) -> String {
     path.extension()
         .and_then(|e| e.to_str())
-        .map(|e| SUPPORTED_EXTENSIONS.contains(&e.to_lowercase().as_str()))
-        .unwrap_or(false)
+        .unwrap_or("")
+        .to_lowercase()
+}
+
+fn is_supported(path: &Path) -> bool {
+    let ext = extension_of(path);
+    RAW_EXTENSIONS.contains(&ext.as_str())
+        || JPEG_EXTENSIONS.contains(&ext.as_str())
+        || OTHER_SUPPORTED_EXTENSIONS.contains(&ext.as_str())
 }
 
 fn scan_files(root: &Path) -> Vec<PathBuf> {
@@ -43,12 +52,104 @@ fn scan_files(root: &Path) -> Vec<PathBuf> {
         .collect()
 }
 
-fn process_file(path: &Path, preview_size: u32) -> ProcessedFile {
-    let file_path = path.to_string_lossy().to_string();
-    let exif_data = exif::read(path);
+/// Una "unidad" a procesar: normalmente un archivo suelto, o un par RAW+JPEG
+/// del mismo disparo fusionado en un solo registro (ver
+/// fase1-ingesta.md, "RAW + JPEG del mismo disparo cuentan como 1 sola foto").
+struct ScanUnit {
+    /// Va a `images.file_path` — el RAW si hay par, el archivo mismo si no.
+    primary: PathBuf,
+    /// De dónde se extrae la miniatura/pHash/métricas — el JPEG si hay par
+    /// (más confiable que decodificar el RAW), el archivo mismo si no.
+    thumbnail_source: PathBuf,
+    /// Va a `images.paired_path` — `Some(jpeg)` solo si hubo emparejamiento.
+    paired_path: Option<PathBuf>,
+}
+
+/// Agrupa `files` por carpeta + nombre base (sin extensión, case-insensitive)
+/// y fusiona en un único `ScanUnit` los grupos de exactamente 2 archivos
+/// donde uno es RAW y el otro JPEG. Cualquier otro caso (archivo suelto, o un
+/// grupo ambiguo de 3+ archivos con el mismo nombre base) se procesa como
+/// unidades independientes — fusionar solo el caso inequívoco RAW+JPEG evita
+/// tener que adivinar en casos raros (ej. dos RAW distintos con igual
+/// nombre en carpetas... no debería pasar dado que ya se agrupa por carpeta,
+/// pero un IMG_1234.CR2 + IMG_1234.CR3 sí caería acá y queda sin fusionar).
+fn group_into_units(files: Vec<PathBuf>) -> Vec<ScanUnit> {
+    use std::collections::HashMap;
+    let mut groups: HashMap<(PathBuf, String), Vec<PathBuf>> = HashMap::new();
+    for f in files {
+        let parent = f.parent().unwrap_or(Path::new("")).to_path_buf();
+        let stem = f
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        groups.entry((parent, stem)).or_default().push(f);
+    }
+
+    let mut units = Vec::new();
+    for (_, group) in groups {
+        if group.len() == 2 {
+            let (a, b) = (&group[0], &group[1]);
+            let (ext_a, ext_b) = (extension_of(a), extension_of(b));
+            let pair = if RAW_EXTENSIONS.contains(&ext_a.as_str())
+                && JPEG_EXTENSIONS.contains(&ext_b.as_str())
+            {
+                Some((a.clone(), b.clone()))
+            } else if RAW_EXTENSIONS.contains(&ext_b.as_str())
+                && JPEG_EXTENSIONS.contains(&ext_a.as_str())
+            {
+                Some((b.clone(), a.clone()))
+            } else {
+                None
+            };
+            if let Some((raw_path, jpeg_path)) = pair {
+                units.push(ScanUnit {
+                    primary: raw_path,
+                    thumbnail_source: jpeg_path.clone(),
+                    paired_path: Some(jpeg_path),
+                });
+                continue;
+            }
+        }
+        for f in group {
+            units.push(ScanUnit {
+                thumbnail_source: f.clone(),
+                primary: f,
+                paired_path: None,
+            });
+        }
+    }
+    units
+}
+
+fn process_unit(unit: &ScanUnit, preview_size: u32) -> ProcessedFile {
+    let file_path = unit.primary.to_string_lossy().to_string();
+    let paired_path = unit
+        .paired_path
+        .as_ref()
+        .map(|p| p.to_string_lossy().to_string());
+
+    // El EXIF (iso/aperture/focal_length) se lee del RAW/archivo primario; si
+    // no trae nada legible y hay un JPEG emparejado, se completa desde ahí
+    // (misma escena, el JPEG lo genera la cámara al momento de la toma —
+    // ver exif::read, que ya degrada a ExifData::default() sin fallar).
+    let mut exif_data = exif::read(&unit.primary);
+    if unit.paired_path.is_some()
+        && exif_data.iso.is_none()
+        && exif_data.aperture.is_none()
+        && exif_data.focal_length.is_none()
+    {
+        let companion_exif = exif::read(&unit.thumbnail_source);
+        if companion_exif.iso.is_some()
+            || companion_exif.aperture.is_some()
+            || companion_exif.focal_length.is_some()
+        {
+            exif_data = companion_exif;
+        }
+    }
     let exif_json = serde_json::to_string(&exif_data).unwrap_or_else(|_| "{}".to_string());
 
-    match thumbnail::extract_normalized(path, &exif_data, preview_size) {
+    match thumbnail::extract_normalized(&unit.thumbnail_source, &exif_data, preview_size) {
         Ok(img) => {
             let hash = phash::compute(&img);
             let metrics = quality::compute(&img);
@@ -60,6 +161,7 @@ fn process_file(path: &Path, preview_size: u32) -> ProcessedFile {
 
             ProcessedFile {
                 file_path,
+                paired_path,
                 thumbnail_bytes,
                 thumbnail_status: "ok",
                 hash: Some(hash),
@@ -74,6 +176,7 @@ fn process_file(path: &Path, preview_size: u32) -> ProcessedFile {
             tracing::warn!(file = %file_path, "falló la extracción de miniatura");
             ProcessedFile {
                 file_path,
+                paired_path,
                 thumbnail_bytes: None,
                 thumbnail_status: "failed",
                 hash: None,
@@ -87,8 +190,17 @@ fn process_file(path: &Path, preview_size: u32) -> ProcessedFile {
     }
 }
 
+/// Todos los `file_path` ya conocidos por la BD, sea como `images.file_path`
+/// o como `images.paired_path` — necesario para que la fusión RAW+JPEG no
+/// rompa la idempotencia de `init`: si un JPEG ya quedó fusionado con su RAW
+/// en una corrida anterior, no debe volver a insertarse solo en la próxima
+/// corrida solo porque su propio `file_path` nunca apareció en `images.file_path`.
 fn existing_file_paths(conn: &Connection) -> AppResult<std::collections::HashSet<String>> {
-    let mut stmt = conn.prepare("SELECT file_path FROM images")?;
+    let mut stmt = conn.prepare(
+        "SELECT file_path FROM images \
+         UNION \
+         SELECT paired_path FROM images WHERE paired_path IS NOT NULL",
+    )?;
     let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
     let mut set = std::collections::HashSet::new();
     for row in rows {
@@ -120,10 +232,14 @@ pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
         .into_iter()
         .filter(|p| !existing.contains(&p.to_string_lossy().to_string()))
         .collect();
+    let scanned_count = new_files.len();
 
-    let processed: Vec<ProcessedFile> = new_files
+    let units = group_into_units(new_files);
+    let paired_count = units.iter().filter(|u| u.paired_path.is_some()).count();
+
+    let processed: Vec<ProcessedFile> = units
         .par_iter()
-        .map(|path| process_file(path, config.preview_size))
+        .map(|unit| process_unit(unit, config.preview_size))
         .collect();
 
     let mut ok_count = 0u32;
@@ -133,10 +249,11 @@ pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
     ensure_project_meta(&tx, config)?;
     for file in &processed {
         tx.execute(
-            "INSERT OR IGNORE INTO images (file_path, hash, thumbnail, thumbnail_status, exif_json, iso, aperture, focal_length)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            "INSERT OR IGNORE INTO images (file_path, paired_path, hash, thumbnail, thumbnail_status, exif_json, iso, aperture, focal_length)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 file.file_path,
+                file.paired_path,
                 file.hash,
                 file.thumbnail_bytes,
                 file.thumbnail_status,
@@ -181,9 +298,10 @@ pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
     tx.commit()?;
 
     Ok(json!({
-        "scanned": processed.len(),
+        "scanned": scanned_count,
         "inserted_ok": ok_count,
         "inserted_failed": failed_count,
         "skipped_existing": existing.len(),
+        "paired_raw_jpeg": paired_count,
     }))
 }

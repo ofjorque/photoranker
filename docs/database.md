@@ -21,6 +21,7 @@ CREATE TABLE project_meta (
 CREATE TABLE images (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     file_path TEXT UNIQUE NOT NULL,
+    paired_path TEXT,             -- companero RAW+JPEG del mismo disparo (migración 009); NULL si no tiene par, ver fase1-ingesta.md
     hash TEXT,
     thumbnail BLOB,              -- JPEG embebido o decode reducido del RAW
     thumbnail_status TEXT DEFAULT 'ok' CHECK(thumbnail_status IN ('ok','failed')),

@@ -30,6 +30,10 @@ fn stars_from_mu_fixed(mu: f64) -> i32 {
 struct ExportRow {
     id: i64,
     file_path: String,
+    /// Si esta imagen viene de un par RAW+JPEG (ver fase1-ingesta.md), el
+    /// otro archivo del par también recibe su propio sidecar con el mismo
+    /// rating/label/cluster (ver fase4-exportacion.md).
+    paired_path: Option<String>,
     mu: f64,
     sigma: f64,
     rejected: bool,
@@ -164,17 +168,18 @@ pub fn run(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<Val
 
     let rows: Vec<ExportRow> = {
         let mut stmt = conn.prepare(
-            "SELECT id, file_path, mu, sigma, rejected, cluster_id FROM images \
+            "SELECT id, file_path, paired_path, mu, sigma, rejected, cluster_id FROM images \
              WHERE missing = 0 AND thumbnail_status != 'failed'",
         )?;
         stmt.query_map([], |row| {
             Ok(ExportRow {
                 id: row.get(0)?,
                 file_path: row.get(1)?,
-                mu: row.get(2)?,
-                sigma: row.get(3)?,
-                rejected: row.get::<_, i64>(4)? != 0,
-                own_cluster_id: row.get(5)?,
+                paired_path: row.get(2)?,
+                mu: row.get(3)?,
+                sigma: row.get(4)?,
+                rejected: row.get::<_, i64>(5)? != 0,
+                own_cluster_id: row.get(6)?,
             })
         })?
         .filter_map(|r| r.ok())
@@ -221,6 +226,7 @@ pub fn run(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<Val
     let mut stars_breakdown: HashMap<i32, i64> = HashMap::new();
     let mut fallback_fixed_mapping_used = 0i64;
     let mut updates: Vec<(i64, i32, i64)> = Vec::with_capacity(rows.len());
+    let mut written_files = 0i64;
 
     for row in &rows {
         let (stars, used_fallback) = if row.rejected {
@@ -244,6 +250,13 @@ pub fn run(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<Val
             .collect();
 
         xmp::write_sidecar(Path::new(&row.file_path), stars, &subject_tags)?;
+        written_files += 1;
+        // RAW+JPEG del mismo disparo: el compañero también recibe su propio
+        // sidecar con idéntico rating/label/cluster (ver fase1-ingesta.md).
+        if let Some(paired) = &row.paired_path {
+            xmp::write_sidecar(Path::new(paired), stars, &subject_tags)?;
+            written_files += 1;
+        }
         updates.push((row.id, stars, rank_order[&row.id]));
     }
 
@@ -260,7 +273,7 @@ pub fn run(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<Val
     }
 
     Ok(json!({
-        "written": updates.len(),
+        "written": written_files,
         "excluded_failed_thumbnail": excluded_failed_thumbnail,
         "excluded_missing": excluded_missing,
         "mode": match mode { StarsMode::Quantile(_) => "quantile", StarsMode::FixedProvisional => "fixed_provisional" },

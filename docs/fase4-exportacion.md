@@ -77,6 +77,8 @@ Al finalizar, un comando único (`export-xmp`) compila los resultados desde la B
 
 Para una imagen rechazada, `xmp:Rating="-1"` y `dc:subject` toma el tag heredado de su representante (si existe).
 
+**Pares RAW+JPEG** (ver `fase1-ingesta.md`, "RAW + JPEG del mismo disparo cuentan como 1 sola foto"): si `images.paired_path` no es `NULL`, se escribe un sidecar `.xmp` para `file_path` **y** otro para `paired_path`, ambos con el mismo rating/label/cluster — así Darktable/Lightroom ven el rating reflejado sin importar cuál de las dos versiones abran. El campo `written` de la salida JSON cuenta archivos `.xmp` escritos, no filas de `images` — un par fusionado suma 2, no 1.
+
 Todo el proceso es no destructivo: nunca se modifica el RAW, solo los sidecars XMP (ver `architecture.md`, Principios del Proyecto).
 
 ## Checklist de implementación

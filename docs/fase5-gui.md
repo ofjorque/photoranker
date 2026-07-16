@@ -46,6 +46,11 @@ Ningún comando de las fases 1-4 exponía los bytes de `images.thumbnail` ni las
 - `photoranker get-quality-metrics --image-id <id>`: `data = {"id": <id>, "metrics": {...} | null}` (con las columnas de `image_quality_metrics`; `null` si la imagen no tiene fila, ej. si su miniatura falló). `IMAGE_NOT_FOUND` si el id no existe.
 - `photoranker list-bursts`: `data = [{"id": <burst_id>, "images": [{"id": <image_id>, "file_path": "..."}, ...]}, ...]` — solo bursts con `status='pending'` (los `completed` ya fueron resueltos y no vuelven a aparecer), cada uno con sus imágenes miembro ya resueltas por JOIN, para que la GUI arme el minitorneo sin una llamada extra por burst.
 
+Dos comandos más, agregados tras una segunda ronda de feedback probando la GUI contra una biblioteca real:
+
+- `photoranker list-clusters`: `data = [{"id": <cluster_id>, "name": "..."|null, "member_count": <n>, "representative_images": [{"id": <image_id>, "file_path": "...", "probability": <f64>}, ...(hasta 4, orden probability desc)]}, ...]` — para que la GUI muestre unas pocas fotos representativas de cada cluster (las de mayor `probability`, argmax de pertenencia) antes de que el usuario elija el nombre con `cluster-rename`.
+- `photoranker get-variable-values --variable <nombre>`: `data = [{"id": <image_id>, "file_path": "...", "value": <f64>|null}, ...]` (solo imágenes activas, `rejected=0 AND missing=0`) — para que la GUI pueda mostrar/editar el valor de una variable foto por foto (clasificación visual) sin adivinar cuáles ya están etiquetadas. Antes de este comando, `image_variable_values` solo se podía leer desde el modo TUI `variable-tag`.
+
 La GUI llama a `get-thumbnail` por cada imagen visible en pantalla (torneo, ráfagas, panel de referencia) y decodifica el base64 a un `<img src="data:image/jpeg;base64,...">` o equivalente — nunca abre el `.sqlite` por su cuenta.
 
 ## Checklist de implementación
