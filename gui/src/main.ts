@@ -10,7 +10,12 @@ import { renderCluster } from './views/Cluster';
 import { renderVariables } from './views/Variables';
 import { renderExport } from './views/Export';
 
-const routes: Record<Route, (el: HTMLElement) => void | Promise<void>> = {
+// Una vista puede devolver una función de limpieza (ej. remover listeners
+// globales de teclado de RankingBoard) — el router la llama antes de montar
+// la próxima vista, para no acumular listeners al navegar (ver bug: Backspace
+// dejaba de funcionar en otras pantallas tras visitar Torneo/Ráfagas).
+type ViewCleanup = void | (() => void);
+const routes: Record<Route, (el: HTMLElement) => ViewCleanup | Promise<ViewCleanup>> = {
   home: renderHome,
   bursts: renderBursts,
   tournament: renderTournament,
@@ -61,10 +66,14 @@ async function bootstrap() {
     navProjectPath.textContent = project ? project.folderPath : 'Ningún proyecto abierto';
   }
 
+  let currentCleanup: (() => void) | void;
+
   async function renderCurrentRoute() {
+    currentCleanup?.();
+    currentCleanup = undefined;
     renderNav();
     const route = currentRoute();
-    await routes[route](main);
+    currentCleanup = (await routes[route](main)) ?? undefined;
   }
 
   onRouteChange(renderCurrentRoute);

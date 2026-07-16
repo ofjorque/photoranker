@@ -65,6 +65,15 @@ photoranker ranking
 # Ver el progreso del torneo (cuántas imágenes siguen sobre el umbral de sigma)
 photoranker tournament-status
 
+# Deshacer el último grupo de torneo enviado (mu/sigma vuelven al valor previo)
+photoranker tournament-undo
+
+# Reiniciar el torneo principal de esta carpeta (mu/sigma a default, no toca rejected)
+photoranker tournament-reset
+
+# Vaciar por completo el índice global (todas las carpetas, acción destructiva)
+photoranker reset-global-index
+
 # --- Fase 4: Exportación (ver fase4-exportacion.md) ---
 
 # Listar imágenes excluidas por falla de miniatura

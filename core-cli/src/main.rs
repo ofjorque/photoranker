@@ -142,6 +142,21 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Deshace el último grupo de torneo enviado (mu/sigma vuelven al valor previo).
+    #[command(name = "tournament-undo")]
+    TournamentUndo {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Reinicia el torneo principal de esta carpeta (mu/sigma a default, no toca rejected).
+    #[command(name = "tournament-reset")]
+    TournamentReset {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Vacía por completo el índice global (todas las carpetas).
+    #[command(name = "reset-global-index")]
+    ResetGlobalIndex,
     /// Progreso de la sesión de torneo y motivo de parada.
     #[command(name = "tournament-status")]
     TournamentStatus {
@@ -348,6 +363,17 @@ fn run(cli: Cli) -> AppResult<Value> {
             let mut conn = db::open_local(&db_path)?;
             commands::tournament::ranking(&mut conn, &db_path)
         }
+        Commands::TournamentUndo { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::tournament::undo(&mut conn, &db_path)
+        }
+        Commands::TournamentReset { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::tournament::reset(&mut conn, &db_path)
+        }
+        Commands::ResetGlobalIndex => commands::resync_global::reset_global_index(),
         Commands::TournamentStatus { db } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;

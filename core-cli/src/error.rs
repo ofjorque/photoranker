@@ -50,6 +50,9 @@ pub enum AppError {
 
     #[error("Error de XMP: {0}")]
     XmpParseError(String),
+
+    #[error("No hay ningún grupo de torneo para deshacer")]
+    NothingToUndo,
 }
 
 impl From<quick_xml::Error> for AppError {
@@ -77,6 +80,7 @@ impl AppError {
             AppError::IncompleteRanking(_) => "INCOMPLETE_RANKING",
             AppError::InvalidArgument(_) => "INVALID_ARGUMENT",
             AppError::XmpParseError(_) => "XMP_PARSE_ERROR",
+            AppError::NothingToUndo => "NOTHING_TO_UNDO",
         }
     }
 }

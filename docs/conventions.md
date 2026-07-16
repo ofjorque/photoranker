@@ -75,7 +75,7 @@ Todo comando imprime **una sola línea JSON** a stdout con este sobre:
 - `data` contiene el payload específico del comando (puede ser objeto, arreglo, o `null`).
 - El **exit code** del proceso es `0` si `status="ok"`, `1` si `status="error"` — así un script o la GUI pueden decidir sin parsear el JSON si solo necesitan éxito/fallo.
 - `stderr` se reserva exclusivamente para logs de depuración (nunca para el resultado); la GUI no debe parsear `stderr`.
-- Los `code` de error son constantes en `SCREAMING_SNAKE_CASE`, catalogados en `core-cli/src/error.rs`. Ejemplos: `DB_NOT_FOUND`, `BURST_NOT_FOUND`, `IMAGE_NOT_FOUND`, `INVALID_RANKING`, `THUMBNAIL_FAILED`, `VARIABLE_NOT_FOUND`, `CLUSTER_NOT_FOUND`, `R_SUBPROCESS_FAILED`, `INCOMPLETE_RANKING`.
+- Los `code` de error son constantes en `SCREAMING_SNAKE_CASE`, catalogados en `core-cli/src/error.rs`. Ejemplos: `DB_NOT_FOUND`, `BURST_NOT_FOUND`, `IMAGE_NOT_FOUND`, `INVALID_RANKING`, `THUMBNAIL_FAILED`, `VARIABLE_NOT_FOUND`, `CLUSTER_NOT_FOUND`, `R_SUBPROCESS_FAILED`, `INCOMPLETE_RANKING`, `NOTHING_TO_UNDO` (`tournament-undo` sin ningún grupo pendiente de deshacer).
 
 ## Modelo de concurrencia
 
@@ -122,6 +122,7 @@ PhotoRanker **no usa un runtime asíncrono** (nada de `tokio`/`async-std`). El t
 - **Unit tests obligatorios** para toda lógica puramente matemática/determinista, sin necesidad de archivos reales: selección de grupo de 5 por `mu`/`sigma` (`fase3-torneo.md`), mapeo de percentiles a estrellas (`fase4-exportacion.md`), z-score de variables continuas (`fase2-clustering.md`), y el criterio de parada (convergencia/estancamiento/timeout).
 - **Fixtures de imágenes de prueba** en `tests/sample_library/`: un puñado de JPEG pequeños (no hace falta RAW real) con EXIF sintético variado (distintos ISO/velocidad/apertura), más 1-2 archivos corruptos a propósito para probar el fallback de miniatura fallida (`thumbnail_status='failed'`).
 - `cargo clippy` y `cargo fmt --check` como parte del CI.
+- **`PHOTORANKER_HOME`** (variable de entorno, solo para tests): reemplaza `~/.photoranker/` por un directorio arbitrario. Existe exclusivamente para que `cargo test` no toque `config.toml`/`global_index.sqlite` reales de la máquina que corre los tests — `global_index.sqlite` en particular es un archivo compartido entre **todas** las carpetas de un usuario real, así que un test sin este aislamiento puede leer, escribir o (con `reset-global-index`) vaciar datos reales. Todo `run_cli` de `core-cli/tests/*.rs` debe fijarla a un directorio temporal por proceso de test (ver `test_home()`).
 
 ### Prueba de aceptación de referencia (flujo funcional completo, especificación end-to-end)
 

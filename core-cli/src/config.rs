@@ -50,7 +50,19 @@ impl Default for Config {
 }
 
 /// Directorio `~/.photoranker/` (o equivalente por plataforma vía el crate `directories`).
+///
+/// `PHOTORANKER_HOME`, si está definida, reemplaza esta ruta por completo —
+/// **exclusivamente para aislar los tests de integración** de
+/// `~/.photoranker/config.toml` y, sobre todo, de `global_index.sqlite`, que
+/// es un archivo compartido entre todas las carpetas del usuario real (ver
+/// "Índice global compartido" en conventions.md). Sin este override, correr
+/// `cargo test` termina leyendo/escribiendo/vaciando el índice global real de
+/// quien compile el proyecto — ver tests/fase*.rs, que la fijan vía
+/// `Command::env`.
 pub fn photoranker_dir() -> AppResult<PathBuf> {
+    if let Ok(over) = std::env::var("PHOTORANKER_HOME") {
+        return Ok(PathBuf::from(over));
+    }
     let dirs = ProjectDirs::from("", "", "PhotoRanker").ok_or_else(|| {
         AppError::Config(
             "No se pudo determinar el directorio de configuración del usuario".to_string(),

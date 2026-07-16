@@ -6,22 +6,40 @@
 //! SQL (en vez de vía `burst-detect`/`cluster`, que dependen de similitud de
 //! pHash real o de R) para aislar el comportamiento de `export-xmp` en sí.
 //!
-//! Nota: `export-xmp` decide su modo (`quantile` vs `fixed_provisional`)
-//! según el tamaño de `~/.photoranker/global_index.sqlite`, que es *compartido*
-//! con el resto del sistema del usuario (no hay override de entorno en
-//! `config.rs`, ver conventions.md). Este test no controla ese estado, así
-//! que solo hace aserciones exactas sobre estrellas cuando el modo devuelto
-//! es `fixed_provisional`; las invariantes de exclusión/herencia/backup se
-//! comprueban siempre.
+//! Nota histórica: `export-xmp` decide su modo (`quantile` vs
+//! `fixed_provisional`) según el tamaño de `~/.photoranker/global_index.sqlite`.
+//! Hasta que se agregó `PHOTORANKER_HOME` (ver config.rs) ese archivo era el
+//! *real*, compartido con el resto del sistema del usuario — un test corrido
+//! sin querer contra la máquina de un usuario real (ver incidente
+//! documentado en el historial del proyecto) podía vaciar/contaminar datos
+//! reales. `test_home()` aísla cada proceso de test en su propio directorio
+//! temporal, así que este test ahora sí controla el estado del índice global
+//! de punta a punta y puede asertar `fixed_provisional` con confianza (el
+//! índice aislado siempre arranca vacío).
 
 use image::{Rgb, RgbImage};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Aísla `~/.photoranker/` del proceso real de quien corre los tests (ver
+/// mismo helper en fase1_integration.rs y `PHOTORANKER_HOME` en config.rs).
+fn test_home() -> &'static Path {
+    use std::sync::OnceLock;
+    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    HOME.get_or_init(|| {
+        let dir =
+            std::env::temp_dir().join(format!("photoranker_test_home_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    })
+}
+
 fn run_cli(args: &[&str]) -> Value {
     let output = Command::new(env!("CARGO_BIN_EXE_photoranker"))
         .args(args)
+        .env("PHOTORANKER_HOME", test_home())
         .output()
         .expect("no se pudo ejecutar photoranker");
     let stdout = String::from_utf8_lossy(&output.stdout);

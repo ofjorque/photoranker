@@ -93,6 +93,16 @@ Asignar variables subjetivas a miles de fotos requiere verlas. El CLI incluye un
 - [ ] Implementar `ranking` (cálculo en vivo por `mu` descendente, desempate por `sigma` ascendente y luego `image_id`).
 - [ ] Implementar `tournament-status`: devolver progreso del torneo (nº de imágenes con `sigma` sobre el umbral, % de convergencia, y si ya se cumplió el criterio de parada).
 
+## Deshacer / reiniciar (agregado en Fase 5 por feedback de uso real)
+
+Probando la GUI contra una biblioteca real apareció la necesidad de corregir errores humanos sin perder todo el progreso — no estaba cubierto por el diseño original de Fase 3:
+
+- `photoranker tournament-undo [--db]`: revierte el **grupo resuelto más reciente que todavía no se haya deshecho** (`mu`/`sigma`/`stall_counter`/`stalled`/`last_compared_at` vuelven al valor que tenían justo antes de ese grupo). `tournament-result` ahora guarda ese estado "antes" en `tournament_matches` (migración `008_tournament_undo.sql`) precisamente para poder revertir sin tener que invertir la fórmula de `weng_lin_multi_team` (no es invertible en general). Cada fila deshecha se marca `undone=1`, así que deshacer dos veces seguidas sin un nuevo resultado de por medio devuelve `NOTHING_TO_UNDO`. No toca `rejected` (el torneo principal nunca lo modifica). Si el grupo ya se había sincronizado al índice global, ese `mu` queda desactualizado hasta la próxima vez que la imagen participe — límite aceptado, igual que `resync-global`.
+- `photoranker tournament-reset [--db]`: reinicia **todo** el torneo principal de una carpeta — todas las imágenes con `missing=0` vuelven a `mu=25.0`/`sigma=8.33`, se limpia `stalled`/`stall_counter`/`last_compared_at`. **No toca `rejected`**: las decisiones de `burst-tournament` se conservan a propósito. `tournament_matches`/`pending_tournament_groups` se conservan como auditoría histórica, no se borran.
+- `photoranker reset-global-index`: vacía por completo `~/.photoranker/global_index.sqlite` (**todas** las carpetas del usuario, no solo una — acción destructiva y explícita, distinta de `tournament-reset`). Los cuantiles de estrellas (`fase4-exportacion.md`) vuelven al modo `fixed_provisional` hasta que suficientes imágenes vuelvan a sincronizarse.
+
+**Nota de aislamiento para tests**: como el índice global es un archivo único compartido entre todas las carpetas de un usuario real (`~/.photoranker/global_index.sqlite`), los tests de integración deben fijar la variable de entorno `PHOTORANKER_HOME` (ver `config.rs`) a un directorio temporal antes de invocar el CLI — de lo contrario `cargo test` termina leyendo/escribiendo/vaciando el índice global real de quien lo corre. Ver `test_home()` en `core-cli/tests/*.rs`.
+
 ## Siguiente fase
 
 `fase4-exportacion.md`

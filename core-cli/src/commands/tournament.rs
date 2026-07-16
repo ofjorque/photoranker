@@ -4,7 +4,7 @@
 use crate::config::Config;
 use crate::db;
 use crate::error::{AppError, AppResult};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use skillratings::{
     MultiTeamOutcome,
@@ -163,11 +163,13 @@ struct ImageState {
     rejected: i64,
     stall_counter: i64,
     stalled: i64,
+    last_compared_at: Option<String>,
 }
 
 fn fetch_image_state(conn: &Connection, id: i64) -> AppResult<ImageState> {
     conn.query_row(
-        "SELECT mu, sigma, rejected, stall_counter, stalled FROM images WHERE id = ?1",
+        "SELECT mu, sigma, rejected, stall_counter, stalled, last_compared_at \
+         FROM images WHERE id = ?1",
         params![id],
         |row| {
             Ok(ImageState {
@@ -176,6 +178,7 @@ fn fetch_image_state(conn: &Connection, id: i64) -> AppResult<ImageState> {
                 rejected: row.get(2)?,
                 stall_counter: row.get(3)?,
                 stalled: row.get(4)?,
+                last_compared_at: row.get(5)?,
             })
         },
     )
@@ -295,8 +298,20 @@ pub fn result(
             ],
         )?;
         tx.execute(
-            "INSERT INTO tournament_matches (group_id, image_id, rank_position) VALUES (?1, ?2, ?3)",
-            params![group_id, id, pos],
+            "INSERT INTO tournament_matches (
+                group_id, image_id, rank_position,
+                mu_before, sigma_before, stall_counter_before, stalled_before, last_compared_at_before
+             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                group_id,
+                id,
+                pos,
+                old.mu,
+                old.sigma,
+                old.stall_counter,
+                old.stalled,
+                old.last_compared_at,
+            ],
         )?;
         tx.execute(
             "INSERT INTO pending_global_sync (image_id, mu, rejected) VALUES (?1, ?2, ?3) \
@@ -502,6 +517,121 @@ pub fn status(conn: &mut Connection, db_path: &Path, cfg: &Config) -> AppResult<
         "max_rounds": max_rounds,
         "status": reason,
     }))
+}
+
+/// `tournament-undo`: revierte el grupo resuelto más reciente que todavía no
+/// haya sido deshecho (ver fase3-torneo.md, "Deshacer el último resultado
+/// enviado" — agregado por feedback: "me equivoqué al mandar el grupo").
+/// Restaura `mu`/`sigma`/`stall_counter`/`stalled`/`last_compared_at` al valor
+/// que tenían antes de ese grupo (guardado en `tournament_matches` al momento
+/// de aplicar el resultado, ver migración 008) y marca esas filas `undone=1`
+/// para que no puedan deshacerse dos veces. No toca `rejected` — el torneo
+/// principal nunca lo modifica (solo `burst-tournament` lo hace).
+///
+/// **Límite aceptado**: si el resultado del grupo ya se sincronizó al índice
+/// global (`global_ratings`, ver "Sincronización con el índice global" en
+/// fase3-torneo.md) antes de deshacerse, ese `mu` sincronizado queda
+/// desactualizado hasta que la imagen vuelva a participar en un grupo — igual
+/// que `resync-global`, no se considera crítico corregirlo retroactivamente.
+pub fn undo(conn: &mut Connection, db_path: &Path) -> AppResult<Value> {
+    let group_id: Option<String> = conn
+        .query_row(
+            "SELECT group_id FROM tournament_matches \
+             WHERE undone = 0 ORDER BY timestamp DESC, id DESC LIMIT 1",
+            [],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(group_id) = group_id else {
+        return Err(AppError::NothingToUndo);
+    };
+
+    struct Snapshot {
+        image_id: i64,
+        mu_before: f64,
+        sigma_before: f64,
+        stall_counter_before: i64,
+        stalled_before: i64,
+        last_compared_at_before: Option<String>,
+    }
+    let snapshots: Vec<Snapshot> = {
+        let mut stmt = conn.prepare(
+            "SELECT image_id, mu_before, sigma_before, stall_counter_before, \
+                    stalled_before, last_compared_at_before \
+             FROM tournament_matches WHERE group_id = ?1 AND undone = 0",
+        )?;
+        stmt.query_map(params![group_id], |row| {
+            Ok(Snapshot {
+                image_id: row.get(0)?,
+                mu_before: row.get(1)?,
+                sigma_before: row.get(2)?,
+                stall_counter_before: row.get(3)?,
+                stalled_before: row.get(4)?,
+                last_compared_at_before: row.get(5)?,
+            })
+        })?
+        .filter_map(|r| r.ok())
+        .collect()
+    };
+
+    db::backup(conn, db_path)?;
+
+    let tx = conn.transaction()?;
+    for s in &snapshots {
+        tx.execute(
+            "UPDATE images SET mu = ?1, sigma = ?2, stall_counter = ?3, stalled = ?4, \
+             last_compared_at = ?5 WHERE id = ?6",
+            params![
+                s.mu_before,
+                s.sigma_before,
+                s.stall_counter_before,
+                s.stalled_before,
+                s.last_compared_at_before,
+                s.image_id,
+            ],
+        )?;
+        // Si el resultado deshecho todavía no se sincronizó al índice global,
+        // corregimos también el mu en cola para que no se envíe el valor
+        // ahora revertido en el próximo flush por lote.
+        tx.execute(
+            "UPDATE pending_global_sync SET mu = ?1 WHERE image_id = ?2",
+            params![s.mu_before, s.image_id],
+        )?;
+    }
+    tx.execute(
+        "UPDATE tournament_matches SET undone = 1 WHERE group_id = ?1",
+        params![group_id],
+    )?;
+    tx.commit()?;
+
+    Ok(json!({
+        "group_id": group_id,
+        "reverted_images": snapshots.iter().map(|s| s.image_id).collect::<Vec<_>>(),
+    }))
+}
+
+/// `tournament-reset`: reinicia el progreso del torneo principal de esta
+/// carpeta — todas las imágenes no perdidas (`missing=0`) vuelven a
+/// `mu`/`sigma` por defecto y se limpia `stalled`/`stall_counter`/
+/// `last_compared_at`. **No toca `rejected`**: las decisiones ya tomadas en
+/// minitorneos de ráfaga (`burst-tournament`) se conservan (ver
+/// fase3-torneo.md, "Reiniciar el torneo completo de la carpeta" — agregado
+/// por feedback de uso real). El historial en `tournament_matches`/
+/// `pending_tournament_groups` se conserva como auditoría, no se borra.
+pub fn reset(conn: &mut Connection, db_path: &Path) -> AppResult<Value> {
+    db::backup(conn, db_path)?;
+
+    let tx = conn.transaction()?;
+    let reset_count = tx.execute(
+        "UPDATE images SET mu = 25.0, sigma = 8.33, stall_counter = 0, stalled = 0, \
+         last_compared_at = NULL WHERE missing = 0",
+        [],
+    )?;
+    tx.execute("DELETE FROM pending_global_sync", [])?;
+    tx.execute("UPDATE project_meta SET pending_sync_count = 0", [])?;
+    tx.commit()?;
+
+    Ok(json!({ "images_reset": reset_count }))
 }
 
 #[cfg(test)]

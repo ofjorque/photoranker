@@ -9,9 +9,30 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Aísla `~/.photoranker/` (config.toml + global_index.sqlite, COMPARTIDO
+/// entre carpetas reales del usuario) del proceso real de quien corre los
+/// tests — sin esto, `cargo test` termina leyendo/escribiendo/vaciando el
+/// índice global real de la máquina (ver `PHOTORANKER_HOME` en config.rs).
+/// Un solo directorio por proceso de test (no por test individual): los
+/// tests dentro de un mismo binario corren en hilos del mismo proceso, y
+/// compartir esta carpeta es seguro porque cada test genera su propio
+/// `project_id` (UUID) vía `init`, así que nunca colisionan en `global_ratings`.
+fn test_home() -> &'static Path {
+    use std::sync::OnceLock;
+    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    HOME.get_or_init(|| {
+        let dir =
+            std::env::temp_dir().join(format!("photoranker_test_home_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    })
+}
+
 fn run_cli(args: &[&str]) -> Value {
     let output = Command::new(env!("CARGO_BIN_EXE_photoranker"))
         .args(args)
+        .env("PHOTORANKER_HOME", test_home())
         .output()
         .expect("no se pudo ejecutar photoranker");
     let stdout = String::from_utf8_lossy(&output.stdout);

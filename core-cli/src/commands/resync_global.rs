@@ -30,3 +30,15 @@ pub fn run(path: &Path) -> AppResult<serde_json::Value> {
         "rows_updated": updated,
     }))
 }
+
+/// `reset-global-index`: vacía por completo `~/.photoranker/global_index.sqlite`
+/// (todas las carpetas, no solo una). Es una acción destructiva y deliberada
+/// distinta de `tournament-reset` (que solo afecta una carpeta) — agregada
+/// por feedback de uso real ("reiniciar... para el global"). Los cuantiles de
+/// estrellas (ver fase4-exportacion.md) vuelven al modo `fixed_provisional`
+/// hasta que suficientes imágenes vuelvan a sincronizarse.
+pub fn reset_global_index() -> AppResult<serde_json::Value> {
+    let global_conn = db::open_global()?;
+    let deleted = global_conn.execute("DELETE FROM global_ratings", [])?;
+    Ok(json!({ "rows_deleted": deleted }))
+}

@@ -8,9 +8,24 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+/// Aísla `~/.photoranker/` del proceso real de quien corre los tests (ver
+/// mismo helper en fase1_integration.rs y `PHOTORANKER_HOME` en config.rs).
+fn test_home() -> &'static Path {
+    use std::sync::OnceLock;
+    static HOME: OnceLock<PathBuf> = OnceLock::new();
+    HOME.get_or_init(|| {
+        let dir =
+            std::env::temp_dir().join(format!("photoranker_test_home_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    })
+}
+
 fn run_cli(args: &[&str]) -> Value {
     let output = Command::new(env!("CARGO_BIN_EXE_photoranker"))
         .args(args)
+        .env("PHOTORANKER_HOME", test_home())
         .output()
         .expect("no se pudo ejecutar photoranker");
     let stdout = String::from_utf8_lossy(&output.stdout);

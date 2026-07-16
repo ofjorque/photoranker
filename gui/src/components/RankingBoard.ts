@@ -164,7 +164,17 @@ export function mountRankingBoard(
     renderFocus();
   }
 
+  function isTypingTarget(target: EventTarget | null): boolean {
+    if (!(target instanceof HTMLElement)) return false;
+    const tag = target.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+  }
+
   function onKeyDown(e: KeyboardEvent) {
+    // Nunca interceptar atajos mientras el usuario escribe en un campo de
+    // texto en cualquier parte de la app (ver bug: Backspace no funcionaba
+    // en "agregar variable" porque este listener global lo capturaba).
+    if (isTypingTarget(e.target)) return;
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || (e.key === 'Tab' && !e.shiftKey)) {
       e.preventDefault();
       moveFocus(1);
