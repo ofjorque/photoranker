@@ -17,7 +17,14 @@ pub struct ThumbnailExtractionFailed;
 /// archivo directamente como imagen estándar (JPEG/PNG/etc.), (2) usar la
 /// miniatura JPEG embebida en EXIF/IFD1, (3) decode reducido de RAW vía
 /// `rawloader` con debayer simple 2x2 (sin demosaico avanzado — suficiente
-/// para pHash/métricas, no para revelado real).
+/// para pHash/métricas, no para revelado real), (4) escanear el archivo en
+/// busca de un JPEG completo embebido "a mano" (ver `scan_embedded_jpegs`) —
+/// cubre formatos que `rawloader` no reconoce en absoluto (ej. Canon CR3,
+/// contenedor ISO-BMFF; `rawloader` 0.37 no tiene ningún decoder para CR3,
+/// ni parcial ni por modelo de cámara — falla el 100% de las veces, no
+/// intermitentemente, ver issue upstream pedrocr/rawloader#23) pero que de
+/// todos modos suelen embeber uno o más JPEGs completos (miniatura + preview
+/// de mayor resolución) como blobs contiguos dentro del archivo.
 pub fn extract_normalized(
     path: &Path,
     exif: &ExifData,
@@ -41,7 +48,61 @@ pub fn extract_normalized(
         return Ok(resize_max_side(rotated, preview_size));
     }
 
+    if let Ok(bytes) = std::fs::read(path)
+        && let Some(img) = scan_embedded_jpegs(&bytes)
+    {
+        return Ok(normalize(img, exif.orientation, preview_size));
+    }
+
     Err(ThumbnailExtractionFailed)
+}
+
+/// Último recurso, deliberadamente genérico y heurístico: escanea `bytes`
+/// buscando pares de marcadores JPEG SOI (`FF D8`) / EOI (`FF D9`) y
+/// devuelve, entre todos los que decodifican con éxito vía el crate `image`,
+/// el más grande en bytes (suele ser el preview de mayor resolución, no la
+/// miniatura chica — los contenedores RAW que embeben más de un JPEG casi
+/// siempre incluyen ambos). No entiende la estructura del contenedor (ISO-BMFF,
+/// TIFF, ni cajas específicas de cada fabricante) — solo busca bytes que
+/// *parecen* un JPEG completo y confía en que `image::load_from_memory`
+/// rechace los falsos positivos (un SOI/EOI que no encierra un JPEG válido
+/// simplemente no decodifica). Se prueba como último recurso porque es más
+/// lento y menos preciso que un parser real del contenedor.
+fn scan_embedded_jpegs(bytes: &[u8]) -> Option<DynamicImage> {
+    let mut best: Option<(usize, DynamicImage)> = None;
+    let mut pos = 0;
+    while pos + 1 < bytes.len() {
+        if bytes[pos] == 0xFF
+            && bytes[pos + 1] == 0xD8
+            && let Some(end) = find_eoi(bytes, pos + 2)
+        {
+            let candidate = &bytes[pos..end];
+            if let Ok(img) =
+                image::load_from_memory_with_format(candidate, image::ImageFormat::Jpeg)
+                && best.as_ref().is_none_or(|(len, _)| candidate.len() > *len)
+            {
+                best = Some((candidate.len(), img));
+            }
+            pos = end;
+            continue;
+        }
+        pos += 1;
+    }
+    best.map(|(_, img)| img)
+}
+
+/// Busca el próximo marcador EOI (`FF D9`) desde `from`. Devuelve el índice
+/// justo después de él (para que el slice `[soi..eoi]` incluya ambos
+/// marcadores, como espera un decoder JPEG).
+fn find_eoi(bytes: &[u8], from: usize) -> Option<usize> {
+    let mut i = from;
+    while i + 1 < bytes.len() {
+        if bytes[i] == 0xFF && bytes[i + 1] == 0xD9 {
+            return Some(i + 2);
+        }
+        i += 1;
+    }
+    None
 }
 
 fn normalize(img: DynamicImage, exif_orientation: Option<u32>, preview_size: u32) -> DynamicImage {
@@ -165,4 +226,67 @@ fn debayer(raw: &rawloader::RawImage) -> Option<ImageBuffer<Rgb<u8>, Vec<u8>>> {
     }
 
     Some(buf)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::RgbImage;
+    use std::io::Cursor;
+
+    fn encode_jpeg(width: u32, height: u32, value: u8) -> Vec<u8> {
+        let img = RgbImage::from_pixel(width, height, Rgb([value, value, value]));
+        let mut buf = Vec::new();
+        img.write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Jpeg)
+            .unwrap();
+        buf
+    }
+
+    /// Simula un archivo de contenedor que `image`/`rawloader` no saben
+    /// interpretar (como un CR3 real) pero que igual trae un JPEG completo
+    /// embebido en algún punto del archivo, rodeado de bytes arbitrarios.
+    #[test]
+    fn finds_jpeg_embedded_in_unparseable_container() {
+        let jpeg = encode_jpeg(32, 24, 128);
+        let mut container = vec![0u8; 50]; // cabecera arbitraria, no es un JPEG
+        container.extend_from_slice(&jpeg);
+        container.extend_from_slice(&[0xAA; 30]); // cola arbitraria
+
+        let found = scan_embedded_jpegs(&container).expect("debe encontrar el JPEG embebido");
+        assert_eq!(found.width(), 32);
+        assert_eq!(found.height(), 24);
+    }
+
+    #[test]
+    fn picks_the_largest_valid_jpeg_when_multiple_are_embedded() {
+        let small = encode_jpeg(16, 16, 50); // miniatura chica
+        let large = encode_jpeg(64, 48, 200); // preview de mayor resolución
+
+        let mut container = Vec::new();
+        container.extend_from_slice(&[0u8; 20]);
+        container.extend_from_slice(&small);
+        container.extend_from_slice(&[0u8; 20]);
+        container.extend_from_slice(&large);
+        container.extend_from_slice(&[0u8; 20]);
+
+        let found = scan_embedded_jpegs(&container).expect("debe encontrar al menos un JPEG");
+        assert_eq!(
+            (found.width(), found.height()),
+            (64, 48),
+            "debe preferir el JPEG más grande en bytes, no el primero encontrado"
+        );
+    }
+
+    #[test]
+    fn returns_none_when_no_valid_jpeg_is_embedded() {
+        // Bytes con un SOI/EOI "de casualidad" pero sin un JPEG válido en medio.
+        let container = vec![0xFF, 0xD8, 1, 2, 3, 4, 5, 0xFF, 0xD9];
+        assert!(scan_embedded_jpegs(&container).is_none());
+    }
+
+    #[test]
+    fn returns_none_on_empty_or_tiny_input() {
+        assert!(scan_embedded_jpegs(&[]).is_none());
+        assert!(scan_embedded_jpegs(&[0xFF]).is_none());
+    }
 }

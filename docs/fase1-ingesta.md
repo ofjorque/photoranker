@@ -63,12 +63,18 @@ Estas métricas se calculan **una sola vez en `init`**, se guardan en `image_qua
 
 ## 3. Manejo de fallas en extracción de miniatura
 
-Si el RAW no trae preview JPEG embebido, se intenta un decode reducido del RAW usando el crate **`rawloader`** (Rust puro — se prefiere sobre bindings a `libraw`/`dcraw` porque estos requieren un toolchain de compilación en C que suele ser problemático en Windows). `rawloader` tiene **cobertura de formatos más limitada que `libraw`** (puede no soportar modelos de cámara muy nuevos o poco comunes) — esto es una limitación aceptada del MVP, no un bug a resolver con un tercer fallback. Si `rawloader` no soporta el formato específico de la cámara o el decode falla:
+Si el RAW no trae preview JPEG embebido reconocible por EXIF/IFD1, se intenta un decode reducido del RAW usando el crate **`rawloader`** (Rust puro — se prefiere sobre bindings a `libraw`/`dcraw` porque estos requieren un toolchain de compilación en C que suele ser problemático en Windows). `rawloader` tiene **cobertura de formatos más limitada que `libraw`**: en particular, **no tiene ningún soporte para Canon CR3** (contenedor ISO-BMFF, distinto del TIFF-based CR2) — no es una limitación intermitente por modelo de cámara, `rawloader` 0.37 falla el 100% de las veces con cualquier `.CR3` (ver issue upstream [pedrocr/rawloader#23](https://github.com/pedrocr/rawloader/issues/23), sin resolver). Esto es una limitación aceptada del crate, no un bug de PhotoRanker.
+
+**Último recurso antes de marcar la miniatura como fallida**: se escanea el archivo en busca de un JPEG completo embebido "a mano" (marcadores SOI/EOI, sin entender la estructura del contenedor) — cubre exactamente el caso de CR3 y formatos similares que `rawloader` no reconoce en absoluto pero que igual embeben uno o más JPEGs completos (miniatura + preview de mayor resolución) como blobs dentro del archivo. Se usa el JPEG más grande en bytes que logre decodificar (ver `thumbnail.rs`, `scan_embedded_jpegs`). Esto es deliberadamente heurístico (no un parser real de ISO-BMFF/las cajas específicas de Canon) y se prueba como último paso, después de que las vías "propias" fallan.
+
+**Complementario — disparo en RAW+JPEG simultáneo**: si la cámara guarda un JPEG junto al RAW del mismo disparo, `init` los fusiona en una sola foto y usa el JPEG como fuente de miniatura/pHash/métricas, evitando por completo la necesidad de decodificar el RAW (ver más abajo, "RAW + JPEG del mismo disparo cuentan como 1 sola foto").
+
+Si, pese a todo lo anterior, ninguna vía logra extraer una miniatura:
 
 - La imagen queda marcada con `thumbnail_status = 'failed'`.
 - **Queda excluida de torneos y detección de ráfagas** hasta resolverse manualmente.
 - El CLI expone un listado de imágenes excluidas y un comando de reintento: `photoranker retry-thumbnail --image-id <id>`.
-- **No se implementa un segundo motor de decode como respaldo.** Si el reintento sigue fallando, la recomendación para el usuario es convertir el archivo manualmente a DNG o TIFF con otra herramienta (ej. Adobe DNG Converter) y volver a intentar — esto queda documentado como limitación conocida, no como algo que el CLI deba resolver automáticamente.
+- **No se implementa un motor de decode real de la imagen RAW (demosaico/revelado) como respaldo.** Si el reintento sigue fallando (ej. la cámara no embebe ningún JPEG completo y el CFA no es Bayer 2x2 estándar), la recomendación para el usuario es convertir el archivo manualmente a DNG o TIFF con otra herramienta (ej. Adobe DNG Converter) y volver a intentar — esto queda documentado como limitación conocida, no como algo que el CLI deba resolver automáticamente.
 
 ## Checklist de implementación
 

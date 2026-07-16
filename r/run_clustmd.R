@@ -254,18 +254,31 @@ for (vname in multi_nominal) {
 ## se confirmó empíricamente con datos sintéticos, reproducible con los 5
 ## métodos de `startCL`, independiente de los datos. El caso más común de
 ## disparar esto es una carpeta con solo `orientation` (binaria) y ninguna
-## variable de usuario. Como excluir esa única variable categórica (y
-## clusterizar solo con las continuas + nominales de 3+ niveles, si las
-## hay) es preferible a que el comando falle en el flujo básico, se excluye
-## y se reporta en `excluded_solo_categorical`.
-excluded_solo_categorical <- character(0)
+## variable de usuario, pero también dispara con cualquier variable de
+## usuario recién creada si `orientation` termina excluida por varianza
+## cero (ej. carpeta donde todas las fotos comparten orientación) — un caso
+## nada raro, y que la primera versión de este workaround manejaba
+## **descartando la variable del usuario en silencio**, reportado como
+## feedback de uso real: "la clasificación siempre se elimina".
+##
+## Fix: en vez de excluir la única variable, se duplica su columna (mismo
+## contenido, un segundo nombre) para que el bloque tenga ancho 2 sin
+## alterar semánticamente los datos — el bug de clustMD es sobre el
+## *ancho* del bloque, no sobre qué variable lo ocupa. Verificado
+## empíricamente con datos sintéticos: no crashea, y el centroide
+## resultante refleja la variable duplicada con normalidad (ver
+## docs/fase2-clustering.md). Se reporta igual en
+## `duplicated_solo_categorical` para que quede visible en la salida JSON
+## que se aplicó este workaround (no se oculta que pasó).
+duplicated_solo_categorical <- character(0)
 if (length(ord_cols) == 1) {
-  excluded_solo_categorical <- names(ord_cols)
-  ord_cols <- list()
+  solo_name <- names(ord_cols)
+  ord_cols[[paste0(solo_name, "__dup")]] <- ord_cols[[solo_name]]
+  duplicated_solo_categorical <- solo_name
 }
 
 if (length(included_continuous) == 0 && length(ord_cols) == 0 && length(nom_cols) == 0) {
-  fail("no quedan variables utilizables tras excluir por varianza cero / NULLs excesivos / bug de clustMD con bloque categórico de tamaño 1")
+  fail("no quedan variables utilizables tras excluir por varianza cero / NULLs excesivos")
 }
 
 ord_mat <- if (length(ord_cols) > 0) as.matrix(as.data.frame(ord_cols)) else matrix(nrow = nrow(data), ncol = 0)
@@ -398,7 +411,7 @@ if (mode == "preview") {
     bic_by_k = bic_by_k,
     excluded_variables = excluded_variables,
     excluded_zero_variance = excluded_zero_variance,
-    excluded_solo_categorical = excluded_solo_categorical,
+    duplicated_solo_categorical = duplicated_solo_categorical,
     n_used = nrow(model_data)
   )
   cat(toJSON(result, auto_unbox = TRUE))
@@ -415,7 +428,7 @@ if (mode == "preview") {
     n_assigned = nrow(model_data),
     excluded_variables = excluded_variables,
     excluded_zero_variance = excluded_zero_variance,
-    excluded_solo_categorical = excluded_solo_categorical
+    duplicated_solo_categorical = duplicated_solo_categorical
   )
   cat(toJSON(result, auto_unbox = TRUE))
 }

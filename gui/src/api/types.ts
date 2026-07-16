@@ -35,7 +35,10 @@ export interface ClusterCommitResult {
   clusters?: number;
   excluded_zero_variance?: string[];
   excluded_variables?: string[];
-  excluded_solo_categorical?: string;
+  /** Informativo, no excluye: la variable se duplicó internamente para
+   *  evitar un crash de clustMD con bloques categóricos de ancho 1, pero
+   *  sigue participando del clustering (ver docs/fase2-clustering.md). */
+  duplicated_solo_categorical?: string;
   [key: string]: unknown;
 }
 

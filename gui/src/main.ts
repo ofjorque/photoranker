@@ -24,13 +24,16 @@ const routes: Record<Route, (el: HTMLElement) => ViewCleanup | Promise<ViewClean
   export: renderExport,
 };
 
+// Orden del flujo de trabajo real (ver feedback de uso): cargar la carpeta,
+// resolver ráfagas, definir/tagear variables, clusterizar (que ya puede usar
+// esas variables), recién ahí el torneo principal, y exportar al final.
 const navItems: Array<{ route: Route; label: string; icon: string }> = [
-  { route: 'home', label: 'Proyecto', icon: '🗂️' },
-  { route: 'bursts', label: 'Ráfagas', icon: '⚡' },
-  { route: 'tournament', label: 'Torneo', icon: '🏆' },
-  { route: 'cluster', label: 'Clustering', icon: '🧩' },
-  { route: 'variables', label: 'Variables', icon: '🏷️' },
-  { route: 'export', label: 'Ranking & Export', icon: '📤' },
+  { route: 'home', label: '1. Cargar', icon: '🗂️' },
+  { route: 'bursts', label: '2. Ráfagas', icon: '⚡' },
+  { route: 'variables', label: '3. Variables', icon: '🏷️' },
+  { route: 'cluster', label: '4. Clustering', icon: '🧩' },
+  { route: 'tournament', label: '5. Torneo', icon: '🏆' },
+  { route: 'export', label: '6. Exportación', icon: '📤' },
 ];
 
 async function bootstrap() {

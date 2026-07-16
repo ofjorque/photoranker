@@ -11,6 +11,7 @@ import type { UserVariable, VariableValueEntry } from '../api/types';
 import { getProject } from '../state';
 import { showToast } from '../toast';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
+import { makeZoomable } from '../components/Lightbox';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -298,6 +299,10 @@ function mountClassifier(
       img.style.height = '100%';
       img.style.objectFit = 'cover';
       thumbEl.appendChild(img);
+      // makeZoomable se aplica a `img` (recreado en cada render), no a
+      // `thumbEl` (persistente) — evita acumular listeners de click en cada
+      // navegación (ver el mismo bug ya corregido en RankingBoard).
+      makeZoomable(img, () => url, filenameEl.textContent ?? '');
     } else {
       thumbEl.textContent = 'Sin miniatura';
     }

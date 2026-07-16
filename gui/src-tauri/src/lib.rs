@@ -6,8 +6,12 @@
 
 use directories::ProjectDirs;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
+use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 
 /// Localiza el ejecutable `photoranker` (el único "cerebro" del proyecto).
@@ -88,6 +92,177 @@ fn run_photoranker(args: Vec<String>) -> Result<serde_json::Value, String> {
 
     serde_json::from_str(trimmed)
         .map_err(|e| format!("JSON inválido del CLI: {e}\nstdout: {trimmed}"))
+}
+
+/// Procesos `photoranker` lanzados por `run_photoranker_async`, indexados por
+/// el `op_id` que genera el frontend (ver api/asyncCli.ts) — permite que
+/// `cancel_photoranker` los mate por PID sin depender de un ID generado acá
+/// (evita una carrera entre "Rust genera el id" y "el evento ya llegó al
+/// frontend antes de que conozca ese id").
+#[derive(Default)]
+struct RunningOps(Mutex<HashMap<String, Arc<Mutex<Child>>>>);
+
+/// `op_id`s cancelados explícitamente por el usuario — así el hilo que
+/// espera la salida del proceso puede distinguir "lo maté yo" de "se cayó
+/// solo" al armar el evento `photoranker-done` (Windows no expone esa
+/// distinción en `ExitStatus`).
+#[derive(Default)]
+struct CancelledOps(Mutex<HashSet<String>>);
+
+#[derive(Clone, Serialize)]
+struct ProcessLogEvent {
+    op_id: String,
+    stream: &'static str,
+    line: String,
+}
+
+#[derive(Clone, Serialize)]
+struct ProcessDoneEvent {
+    op_id: String,
+    /// Sobre JSON final (última línea no vacía de stdout), si se pudo parsear.
+    envelope: Option<serde_json::Value>,
+    /// Mensaje de error de transporte (el proceso no pudo esperarse, etc.) —
+    /// distinto de un envelope `{"status":"error",...}`, que sí es `envelope`.
+    error: Option<String>,
+    cancelled: bool,
+}
+
+/// Versión con streaming + cancelación de `run_photoranker`, hoy usada solo
+/// para `init` (ver docs/fase5-gui.md) — la GUI muestra en vivo el archivo
+/// que se está procesando (stderr trae los logs de `tracing`) y puede
+/// cancelar sin esperar a que termine. El sobre JSON final se emite en el
+/// evento `photoranker-done`, no en el valor de retorno de este comando — el
+/// valor de retorno es solo un ack de que el proceso arrancó. `op_id` lo
+/// genera el frontend (`crypto.randomUUID()`) para que pueda suscribirse a
+/// los eventos ANTES de invocar este comando, sin ventana de carrera.
+///
+/// **Deliberadamente NO se usa para `cluster --preview`/`--k`**: ese comando
+/// bloquea esperando a `Rscript` como subproceso *hijo* de `photoranker`, y
+/// `cancel_photoranker` mata por PID — en Windows, matar el proceso padre no
+/// mata a sus hijos (no hay cascada sin Job Objects), así que cancelar
+/// dejaría un `Rscript.exe` huérfano reteniendo el lock WAL de la BD. `init`
+/// es seguro de cancelar porque su paralelismo es con hilos (`rayon`) dentro
+/// del mismo proceso, no subprocesos.
+#[tauri::command]
+fn run_photoranker_async(
+    app: AppHandle,
+    running: State<RunningOps>,
+    op_id: String,
+    args: Vec<String>,
+) -> Result<(), String> {
+    let cli_path = resolve_cli_path()?;
+    let mut child = Command::new(&cli_path)
+        .args(&args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("No se pudo ejecutar '{}': {e}", cli_path.display()))?;
+
+    let stdout = child.stdout.take().expect("stdout piped");
+    let stderr = child.stderr.take().expect("stderr piped");
+
+    let child_arc = Arc::new(Mutex::new(child));
+    running
+        .0
+        .lock()
+        .unwrap()
+        .insert(op_id.clone(), child_arc.clone());
+
+    let last_stdout_line = Arc::new(Mutex::new(String::new()));
+
+    let stdout_app = app.clone();
+    let stdout_op_id = op_id.clone();
+    let last_line_writer = last_stdout_line.clone();
+    let stdout_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if !line.trim().is_empty() {
+                *last_line_writer.lock().unwrap() = line.clone();
+            }
+            let _ = stdout_app.emit(
+                "photoranker-log",
+                ProcessLogEvent {
+                    op_id: stdout_op_id.clone(),
+                    stream: "stdout",
+                    line,
+                },
+            );
+        }
+    });
+
+    let stderr_app = app.clone();
+    let stderr_op_id = op_id.clone();
+    let stderr_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+            let _ = stderr_app.emit(
+                "photoranker-log",
+                ProcessLogEvent {
+                    op_id: stderr_op_id.clone(),
+                    stream: "stderr",
+                    line,
+                },
+            );
+        }
+    });
+
+    let wait_app = app.clone();
+    let wait_op_id = op_id.clone();
+    std::thread::spawn(move || {
+        let _ = stdout_thread.join();
+        let _ = stderr_thread.join();
+        let status = child_arc.lock().unwrap().wait();
+
+        wait_app
+            .state::<RunningOps>()
+            .0
+            .lock()
+            .unwrap()
+            .remove(&wait_op_id);
+        let cancelled = wait_app
+            .state::<CancelledOps>()
+            .0
+            .lock()
+            .unwrap()
+            .remove(&wait_op_id);
+
+        let line = last_stdout_line.lock().unwrap().clone();
+        let envelope = serde_json::from_str::<serde_json::Value>(&line).ok();
+        let error = status.err().map(|e| e.to_string());
+
+        let _ = wait_app.emit(
+            "photoranker-done",
+            ProcessDoneEvent {
+                op_id: wait_op_id,
+                envelope,
+                error,
+                cancelled,
+            },
+        );
+    });
+
+    Ok(())
+}
+
+/// Mata el proceso `photoranker` de `op_id` si todavía está corriendo (ver
+/// `run_photoranker_async`). Devuelve `false` si ya había terminado — no es
+/// un error, la GUI simplemente no llega a tiempo de cancelar.
+#[tauri::command]
+fn cancel_photoranker(
+    running: State<RunningOps>,
+    cancelled: State<CancelledOps>,
+    op_id: String,
+) -> Result<bool, String> {
+    cancelled.0.lock().unwrap().insert(op_id.clone());
+    let child = running.0.lock().unwrap().get(&op_id).cloned();
+    match child {
+        Some(child) => {
+            child.lock().unwrap().kill().map_err(|e| e.to_string())?;
+            Ok(true)
+        }
+        None => {
+            cancelled.0.lock().unwrap().remove(&op_id);
+            Ok(false)
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Default)]
@@ -171,8 +346,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(RunningOps::default())
+        .manage(CancelledOps::default())
         .invoke_handler(tauri::generate_handler![
             run_photoranker,
+            run_photoranker_async,
+            cancel_photoranker,
             read_theme_config,
             read_theme_override,
             pick_folder

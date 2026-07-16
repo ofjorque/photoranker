@@ -8,6 +8,7 @@
 //   - Backspace / R reinicia las posiciones del grupo actual.
 import './rankingBoard.css';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
+import { makeZoomable } from './Lightbox';
 
 export interface RankingBoardImage {
   id: number;
@@ -78,6 +79,7 @@ export function mountRankingBoard(
         el.src = url;
         el.alt = name;
         thumbWrap.appendChild(el);
+        makeZoomable(thumbWrap, () => url, name);
       } else {
         const fail = document.createElement('div');
         fail.className = 'thumb-placeholder';

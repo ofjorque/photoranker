@@ -3,11 +3,11 @@
 // (ver docs/fase3-torneo.md, "Deshacer / reiniciar"). Envuelve exactamente
 // los comandos del CLI, sin lógica nueva.
 import { invoke } from '@tauri-apps/api/core';
-import { cli, CliError } from '../api';
+import { cli, CliError, extractLogStatus } from '../api';
 import { getProject, setProject, dbPathFor } from '../state';
 import { showToast } from '../toast';
 import { navigate } from '../router';
-import { withLoadingOverlay } from '../components/LoadingOverlay';
+import { showLoadingOverlay } from '../components/LoadingOverlay';
 
 const INIT_PHASES = [
   'Escaneando la carpeta…',
@@ -95,10 +95,15 @@ export async function renderHome(container: HTMLElement): Promise<void> {
       showToast('Elegí una carpeta primero', true);
       return;
     }
+    const run = cli.initAsync(folder, (_stream, line) => {
+      const status = extractLogStatus(line);
+      if (status) overlayHandle.setStatus(status);
+    });
+    const overlayHandle = showLoadingOverlay('Inicializando carpeta…', INIT_PHASES, {
+      onCancel: () => run.cancel(),
+    });
     try {
-      const data = await withLoadingOverlay('Inicializando carpeta…', INIT_PHASES, () =>
-        cli.init(folder),
-      );
+      const data = await run.promise;
       setProject({ folderPath: folder, dbPath: dbPathFor(folder) });
       const pairedNote = data.paired_raw_jpeg > 0 ? `, ${data.paired_raw_jpeg} pares RAW+JPEG fusionados` : '';
       showToast(
@@ -106,7 +111,13 @@ export async function renderHome(container: HTMLElement): Promise<void> {
       );
       renderHome(container);
     } catch (e) {
-      showToast(e instanceof CliError ? e.message : String(e), true);
+      if (e instanceof CliError && e.code === 'CANCELLED') {
+        showToast('init cancelado');
+      } else {
+        showToast(e instanceof CliError ? e.message : String(e), true);
+      }
+    } finally {
+      overlayHandle.close();
     }
   });
 

@@ -128,6 +128,13 @@ fn process_unit(unit: &ScanUnit, preview_size: u32) -> ProcessedFile {
         .paired_path
         .as_ref()
         .map(|p| p.to_string_lossy().to_string());
+    // Log de progreso (stderr, ver conventions.md "Logging") — la GUI lo
+    // muestra en vivo durante init vía streaming de stdout/stderr (ver
+    // docs/fase5-gui.md, agregado por feedback de uso real: "que salga el
+    // nombre de la carpeta/archivo que se está escaneando"). rayon procesa
+    // en paralelo, así que estas líneas se intercalan entre hilos — es
+    // esperable, la GUI solo muestra la más reciente.
+    tracing::info!(file = %file_path, "procesando imagen");
 
     // El EXIF (iso/aperture/focal_length) se lee del RAW/archivo primario; si
     // no trae nada legible y hay un JPEG emparejado, se completa desde ahí
@@ -223,6 +230,7 @@ fn ensure_project_meta(tx: &rusqlite::Transaction, config: &Config) -> AppResult
 }
 
 pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
+    tracing::info!(path = %scan_path.display(), "escaneando carpeta");
     let db_path = scan_path.join(db::LOCAL_DB_FILENAME);
     let mut conn = db::open_local(&db_path)?;
 
@@ -233,6 +241,7 @@ pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
         .filter(|p| !existing.contains(&p.to_string_lossy().to_string()))
         .collect();
     let scanned_count = new_files.len();
+    tracing::info!(nuevos = scanned_count, "archivos nuevos encontrados");
 
     let units = group_into_units(new_files);
     let paired_count = units.iter().filter(|u| u.paired_path.is_some()).count();

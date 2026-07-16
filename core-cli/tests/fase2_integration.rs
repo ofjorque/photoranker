@@ -246,3 +246,102 @@ fn full_fase2_flow() {
     assert_eq!(bad_rename["status"], "error");
     assert_eq!(bad_rename["code"], "CLUSTER_NOT_FOUND");
 }
+
+/// Regresión (feedback de uso real: "el clustering siempre elimina las
+/// variables nuevas"). `write_solid_jpeg` genera imágenes cuadradas
+/// (48x48), así que `orientation` siempre tiene varianza cero y queda
+/// excluida — dejando, si el usuario definió exactamente 1 variable propia,
+/// un bloque ordinal+binario de ancho 1. clustMD 1.2 crashea con ese ancho
+/// (ver run_clustmd.R), y la primera versión del workaround descartaba en
+/// silencio la variable del usuario en vez de solo evitar el crash. Ahora se
+/// duplica la columna en vez de descartarla — este test confirma que la
+/// variable llega al centroide del cluster (no queda vacía/perdida).
+#[test]
+fn solo_categorical_variable_is_not_silently_dropped() {
+    let tmp = TempDir::new("fase2_solo_categorical");
+    let folder = &tmp.0;
+
+    for i in 0..10 {
+        write_solid_jpeg(&folder.join(format!("img_{i}.jpg")), 20 + (i as u8) * 20, i);
+    }
+
+    let db_path = folder.join(".photoranker.sqlite");
+    let db_arg = db_path.to_string_lossy().to_string();
+    let path_arg = folder.to_string_lossy().to_string();
+
+    run_cli(&["init", "--path", &path_arg]);
+    run_cli(&[
+        "variable-create",
+        "--name",
+        "Nostalgia",
+        "--type",
+        "ordinal",
+        "--min",
+        "1",
+        "--max",
+        "5",
+        "--db",
+        &db_arg,
+    ]);
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let ids: Vec<i64> = {
+        let mut stmt = conn.prepare("SELECT id FROM images ORDER BY id").unwrap();
+        stmt.query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    drop(conn);
+
+    // Todas las imágenes etiquetadas (0% NULL, no puede ser el umbral de NULL
+    // el motivo de exclusión) con valores variados (no puede ser varianza
+    // cero el motivo tampoco).
+    let values: Vec<String> = ids
+        .iter()
+        .enumerate()
+        .map(|(i, id)| format!("{id}:{}", (i % 5) + 1))
+        .collect();
+    let mut args = vec![
+        "variable-set".to_string(),
+        "--variable".to_string(),
+        "Nostalgia".to_string(),
+        "--db".to_string(),
+        db_arg.clone(),
+        "--values".to_string(),
+    ];
+    args.extend(values);
+    let args_ref: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_cli(&args_ref);
+
+    let commit_result = run_cli(&["cluster", "--k", "2", "--db", &db_arg]);
+    assert_eq!(
+        commit_result["status"], "ok",
+        "cluster --k falló: {commit_result}"
+    );
+    assert_eq!(
+        commit_result["data"]["duplicated_solo_categorical"], "Nostalgia",
+        "el workaround debe reportarse (duplicada, no descartada): {commit_result}"
+    );
+    assert!(
+        commit_result["data"]
+            .get("excluded_solo_categorical")
+            .is_none(),
+        "el campo viejo (que implicaba descarte) no debe existir más: {commit_result}"
+    );
+
+    // La variable debe aparecer en el centroide de al menos un cluster —
+    // si siguiera descartándose, no aparecería en ningún centroid_json.
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let centroids: Vec<String> = {
+        let mut stmt = conn.prepare("SELECT centroid_json FROM clusters").unwrap();
+        stmt.query_map([], |r| r.get::<_, String>(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    assert!(
+        centroids.iter().any(|c| c.contains("Nostalgia")),
+        "Nostalgia debe aparecer en al menos un centroide: {centroids:?}"
+    );
+}

@@ -2,6 +2,7 @@
 // docs/cli-reference.md. Cada uno solo arma los args de `photoranker` y tipa
 // la respuesta; ninguna decisión de negocio vive acá (ver CLAUDE.md).
 import { callCli, formatRankingArgs } from './cli';
+import { runPhotorankerAsync } from './asyncCli';
 import type {
   BurstDetectResult,
   BurstTournamentResult,
@@ -35,8 +36,22 @@ function dbArgs(dbPath: string): string[] {
   return ['--db', dbPath];
 }
 
+function initArgs(path: string): string[] {
+  return ['init', '--path', path];
+}
+function clusterPreviewArgs(dbPath: string): string[] {
+  return ['cluster', '--preview', ...dbArgs(dbPath)];
+}
+function clusterCommitArgs(dbPath: string, k?: number): string[] {
+  return ['cluster', ...(k != null ? ['--k', String(k)] : []), ...dbArgs(dbPath)];
+}
+
 export const cli = {
-  init: (path: string) => callCli<InitResult>(['init', '--path', path]),
+  init: (path: string) => callCli<InitResult>(initArgs(path)),
+
+  /** Versión cancelable + con streaming de logs de `init` (ver api/asyncCli.ts). */
+  initAsync: (path: string, onLog?: (stream: 'stdout' | 'stderr', line: string) => void) =>
+    runPhotorankerAsync<InitResult>(initArgs(path), onLog),
 
   prune: (dbPath: string) => callCli<PruneResult>(['prune', ...dbArgs(dbPath)]),
 
@@ -59,15 +74,9 @@ export const cli = {
       ...formatRankingArgs(ranking),
     ]),
 
-  clusterPreview: (dbPath: string) =>
-    callCli<ClusterPreviewResult>(['cluster', '--preview', ...dbArgs(dbPath)]),
+  clusterPreview: (dbPath: string) => callCli<ClusterPreviewResult>(clusterPreviewArgs(dbPath)),
 
-  clusterCommit: (dbPath: string, k?: number) =>
-    callCli<ClusterCommitResult>([
-      'cluster',
-      ...(k != null ? ['--k', String(k)] : []),
-      ...dbArgs(dbPath),
-    ]),
+  clusterCommit: (dbPath: string, k?: number) => callCli<ClusterCommitResult>(clusterCommitArgs(dbPath, k)),
 
   clusterRename: (dbPath: string, id: number, name: string) =>
     callCli<ClusterRenameResult>([
@@ -173,4 +182,5 @@ export const cli = {
 };
 
 export { CliError } from './cli';
+export { extractLogStatus } from './asyncCli';
 export * from './types';

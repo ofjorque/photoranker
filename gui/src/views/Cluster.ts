@@ -9,6 +9,7 @@ import { showToast } from '../toast';
 import { renderScreePlot } from '../components/ScreePlot';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
 import { withLoadingOverlay } from '../components/LoadingOverlay';
+import { makeZoomable } from '../components/Lightbox';
 
 const PREVIEW_PHASES = [
   'Invocando Rscript…',
@@ -79,6 +80,7 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
         el.style.height = '100%';
         el.style.objectFit = 'cover';
         thumbWrap.appendChild(el);
+        makeZoomable(thumbWrap, () => url);
       });
     }
     card.appendChild(thumbRow);
@@ -163,6 +165,11 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
   await renderClustersList(clustersListContainer, dbPath);
 
   container.querySelector('#preview-btn')?.addEventListener('click', async () => {
+    // Sin cancelar/streaming a propósito, a diferencia de init: cluster
+    // bloquea esperando a Rscript como subproceso hijo, y matar el proceso
+    // `photoranker` padre no mata a Rscript en Windows (no hay cascada de
+    // proceso sin Job Objects) — dejaría un Rscript.exe huérfano reteniendo
+    // el lock WAL de la BD. Ver docs/fase5-gui.md.
     try {
       const data = await withLoadingOverlay('Corriendo clustMD (R)…', PREVIEW_PHASES, () =>
         cli.clusterPreview(dbPath),
