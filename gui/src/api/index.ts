@@ -8,6 +8,7 @@ import type {
   ClusterCommitResult,
   ClusterPreviewResult,
   ClusterRenameResult,
+  ClusterSummary,
   ExportXmpResult,
   FailedThumbnail,
   GetQualityMetricsResult,
@@ -16,14 +17,18 @@ import type {
   PendingBurst,
   PruneResult,
   RankingEntry,
+  ResetGlobalIndexResult,
   ResyncGlobalResult,
   RetryThumbnailResult,
   TournamentNextResult,
+  TournamentResetResult,
   TournamentResultResult,
   TournamentStatusResult,
+  TournamentUndoResult,
   UserVariable,
   VariableCreateResult,
   VariableSetResult,
+  VariableValueEntry,
 } from './types';
 
 function dbArgs(dbPath: string): string[] {
@@ -92,6 +97,16 @@ export const cli = {
   tournamentStatus: (dbPath: string) =>
     callCli<TournamentStatusResult>(['tournament-status', ...dbArgs(dbPath)]),
 
+  tournamentUndo: (dbPath: string) =>
+    callCli<TournamentUndoResult>(['tournament-undo', ...dbArgs(dbPath)]),
+
+  tournamentReset: (dbPath: string) =>
+    callCli<TournamentResetResult>(['tournament-reset', ...dbArgs(dbPath)]),
+
+  resetGlobalIndex: () => callCli<ResetGlobalIndexResult>(['reset-global-index']),
+
+  listClusters: (dbPath: string) => callCli<ClusterSummary[]>(['list-clusters', ...dbArgs(dbPath)]),
+
   listFailedThumbnails: (dbPath: string) =>
     callCli<FailedThumbnail[]>(['list-failed-thumbnails', ...dbArgs(dbPath)]),
 
@@ -135,6 +150,14 @@ export const cli = {
       ...dbArgs(dbPath),
       '--values',
       ...values.map(([id, v]) => `${id}:${v}`),
+    ]),
+
+  getVariableValues: (dbPath: string, variable: string) =>
+    callCli<VariableValueEntry[]>([
+      'get-variable-values',
+      '--variable',
+      variable,
+      ...dbArgs(dbPath),
     ]),
 
   getThumbnail: (dbPath: string, imageId: number) =>

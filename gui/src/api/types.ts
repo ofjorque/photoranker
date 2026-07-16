@@ -6,6 +6,7 @@ export interface InitResult {
   inserted_ok: number;
   inserted_failed: number;
   skipped_existing: number;
+  paired_raw_jpeg: number;
 }
 
 export interface PruneResult {
@@ -175,4 +176,36 @@ export interface BurstImage {
 export interface PendingBurst {
   id: number;
   images: BurstImage[];
+}
+
+export interface TournamentUndoResult {
+  group_id: string;
+  reverted_images: number[];
+}
+
+export interface TournamentResetResult {
+  images_reset: number;
+}
+
+export interface ResetGlobalIndexResult {
+  rows_deleted: number;
+}
+
+export interface ClusterRepresentativeImage {
+  id: number;
+  file_path: string;
+  probability: number | null;
+}
+
+export interface ClusterSummary {
+  id: number;
+  name: string | null;
+  member_count: number;
+  representative_images: ClusterRepresentativeImage[];
+}
+
+export interface VariableValueEntry {
+  id: number;
+  file_path: string;
+  value: number | null;
 }

@@ -1,24 +1,32 @@
 // Variables personalizadas — ver docs/fase2-clustering.md / fase1-ingesta.md.
-// `variable-tag` es un modo TUI que toma la terminal directamente
-// (crossterm/ratatui) y no puede pilotearse como subproceso JSON — ver
-// docs/fase5-gui.md. Replicar su recorrido "una imagen a la vez, salta con
-// espacio" requeriría un comando nuevo que liste qué imágenes activas ya
-// tienen valor para una variable dada, que el CLI no expone todavía; agregar
-// ese comando es una decisión de alcance que excede esta pasada (ver
-// CLAUDE.md, "no tomes decisiones de arquitectura por tu cuenta"). Por eso
-// esta pantalla solo envuelve `variable-create`/`variable-list`/`variable-set`
-// tal como existen, con asignación por lote id:valor.
+// Incluye una clasificación visual foto por foto (ver docs/fase5-gui.md,
+// agregado por feedback de uso real: "debo poder editar las fotos de
+// acuerdo a las variables creadas"). No llama a `variable-tag` (modo TUI que
+// toma la terminal directamente vía crossterm/ratatui y no puede pilotearse
+// como subproceso JSON) — en cambio replica su mecánica (una imagen a la
+// vez, número asigna y avanza, flechas navegan) sobre `get-variable-values` +
+// `variable-set`, los mismos comandos de siempre.
 import { cli, CliError } from '../api';
-import type { UserVariable } from '../api/types';
+import type { UserVariable, VariableValueEntry } from '../api/types';
 import { getProject } from '../state';
 import { showToast } from '../toast';
+import { getThumbnailDataUrl } from '../api/thumbnailCache';
 
-export async function renderVariables(container: HTMLElement): Promise<void> {
+function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  const tag = target.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
+}
+
+export async function renderVariables(container: HTMLElement): Promise<() => void> {
+  const cleanupFns: Array<() => void> = [];
+  const cleanup = () => cleanupFns.forEach((fn) => fn());
+
   const project = getProject();
   if (!project) {
     container.innerHTML =
       '<div class="view"><div class="empty-state">Abrí un proyecto primero.</div></div>';
-    return;
+    return cleanup;
   }
   const dbPath = project.dbPath;
 
@@ -50,6 +58,19 @@ export async function renderVariables(container: HTMLElement): Promise<void> {
       </div>
 
       <div class="panel">
+        <h2>Clasificación visual</h2>
+        <p>Recorré las fotos activas una por una y asigná el valor con el teclado — misma mecánica que el torneo.</p>
+        <div style="display:flex; gap:8px; align-items:end;">
+          <div class="field" style="flex:1">
+            <label>Variable</label>
+            <select id="classify-select"></select>
+          </div>
+          <button class="btn btn-primary" id="start-classify-btn">Empezar</button>
+        </div>
+        <div id="classify-area" style="margin-top:16px"></div>
+      </div>
+
+      <div class="panel">
         <h2>Asignar valores por lote</h2>
         <div class="field">
           <label>Variable</label>
@@ -66,11 +87,15 @@ export async function renderVariables(container: HTMLElement): Promise<void> {
 
   const listContainer = container.querySelector<HTMLElement>('#var-list')!;
   const setSelect = container.querySelector<HTMLSelectElement>('#var-set-select')!;
+  const classifySelect = container.querySelector<HTMLSelectElement>('#classify-select')!;
+  const classifyArea = container.querySelector<HTMLElement>('#classify-area')!;
+
+  let currentVariables: UserVariable[] = [];
 
   async function refreshList() {
     try {
-      const variables = await cli.variableList(dbPath);
-      renderList(variables);
+      currentVariables = await cli.variableList(dbPath);
+      renderList();
     } catch (e) {
       listContainer.innerHTML = `<div class="empty-state">${
         e instanceof CliError ? e.message : String(e)
@@ -78,17 +103,18 @@ export async function renderVariables(container: HTMLElement): Promise<void> {
     }
   }
 
-  function renderList(variables: UserVariable[]) {
-    if (variables.length === 0) {
+  function renderList() {
+    if (currentVariables.length === 0) {
       listContainer.innerHTML = '<div class="empty-state">Todavía no hay variables definidas.</div>';
       setSelect.innerHTML = '';
+      classifySelect.innerHTML = '';
       return;
     }
     listContainer.innerHTML = `
       <table>
         <thead><tr><th>Nombre</th><th>Tipo</th><th>Rango / Categorías</th></tr></thead>
         <tbody>
-          ${variables
+          ${currentVariables
             .map(
               (v) => `<tr><td>${v.name}</td><td>${v.var_type}</td><td>${
                 v.var_type === 'ordinal'
@@ -99,7 +125,11 @@ export async function renderVariables(container: HTMLElement): Promise<void> {
             .join('')}
         </tbody>
       </table>`;
-    setSelect.innerHTML = variables.map((v) => `<option value="${v.name}">${v.name}</option>`).join('');
+    const options = currentVariables
+      .map((v) => `<option value="${v.name}">${v.name}</option>`)
+      .join('');
+    setSelect.innerHTML = options;
+    classifySelect.innerHTML = options;
   }
 
   await refreshList();
@@ -158,4 +188,171 @@ export async function renderVariables(container: HTMLElement): Promise<void> {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
   });
+
+  container.querySelector('#start-classify-btn')?.addEventListener('click', async () => {
+    const variableName = classifySelect.value;
+    const variable = currentVariables.find((v) => v.name === variableName);
+    if (!variable) {
+      showToast('Elegí una variable', true);
+      return;
+    }
+    // Cada "Empezar" reemplaza el listener de teclado anterior, si había uno.
+    cleanup();
+    cleanupFns.length = 0;
+    classifyArea.innerHTML = '<p>Cargando…</p>';
+    let entries: VariableValueEntry[];
+    try {
+      entries = await cli.getVariableValues(dbPath, variableName);
+    } catch (e) {
+      classifyArea.innerHTML = `<div class="empty-state">${
+        e instanceof CliError ? e.message : String(e)
+      }</div>`;
+      return;
+    }
+    if (entries.length === 0) {
+      classifyArea.innerHTML = '<div class="empty-state">No hay imágenes activas para clasificar.</div>';
+      return;
+    }
+    const destroy = mountClassifier(classifyArea, dbPath, variable, entries);
+    cleanupFns.push(destroy);
+  });
+
+  return cleanup;
+}
+
+function mountClassifier(
+  container: HTMLElement,
+  dbPath: string,
+  variable: UserVariable,
+  entries: VariableValueEntry[],
+): () => void {
+  let index = 0;
+
+  container.innerHTML = `
+    <div class="panel" style="max-width:420px">
+      <div class="panel-row">
+        <span id="classify-counter" class="mono"></span>
+        <span id="classify-current-value" class="badge badge-muted"></span>
+      </div>
+      <div class="thumb-wrap" style="aspect-ratio:4/3; background:var(--color-bg); border-radius:var(--radius-md); overflow:hidden; display:flex; align-items:center; justify-content:center; margin:10px 0;">
+        <div id="classify-thumb"></div>
+      </div>
+      <div id="classify-filename" style="font-size:12px; color:var(--color-text-muted); word-break:break-all;"></div>
+      <div id="classify-options" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;"></div>
+      <div class="ranking-hint" style="margin-top:12px;">
+        <kbd>&larr;</kbd> anterior · <kbd>&rarr;</kbd>/<kbd>Espacio</kbd> siguiente (sin asignar) ·
+        números asignan y avanzan · <kbd>Backspace</kbd> retrocede
+      </div>
+    </div>
+  `;
+
+  const counterEl = container.querySelector<HTMLElement>('#classify-counter')!;
+  const currentValueEl = container.querySelector<HTMLElement>('#classify-current-value')!;
+  const thumbEl = container.querySelector<HTMLElement>('#classify-thumb')!;
+  const filenameEl = container.querySelector<HTMLElement>('#classify-filename')!;
+  const optionsEl = container.querySelector<HTMLElement>('#classify-options')!;
+
+  function optionLabel(code: number): string {
+    if (variable.var_type === 'nominal') {
+      const cat = variable.categories.find((c) => c.code === code);
+      return cat ? `${code} = ${cat.label}` : String(code);
+    }
+    return String(code);
+  }
+
+  function validCodes(): number[] {
+    if (variable.var_type === 'nominal') {
+      return variable.categories.map((c) => c.code);
+    }
+    const min = variable.min_value ?? 1;
+    const max = variable.max_value ?? 5;
+    const codes: number[] = [];
+    for (let v = min; v <= max; v++) codes.push(v);
+    return codes;
+  }
+
+  async function render() {
+    const entry = entries[index];
+    counterEl.textContent = `${index + 1} / ${entries.length}`;
+    currentValueEl.textContent =
+      entry.value == null ? 'sin asignar' : `valor: ${optionLabel(entry.value)}`;
+    filenameEl.textContent = entry.file_path.split(/[\\/]/).pop() ?? entry.file_path;
+    thumbEl.innerHTML = 'Cargando…';
+
+    const codes = validCodes();
+    optionsEl.innerHTML = '';
+    for (const code of codes) {
+      const btn = document.createElement('button');
+      btn.className = 'btn' + (entry.value === code ? ' btn-primary' : '');
+      btn.textContent = optionLabel(code);
+      btn.addEventListener('click', () => assign(code));
+      optionsEl.appendChild(btn);
+    }
+
+    const url = await getThumbnailDataUrl(dbPath, entry.id);
+    thumbEl.innerHTML = '';
+    if (url) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.objectFit = 'cover';
+      thumbEl.appendChild(img);
+    } else {
+      thumbEl.textContent = 'Sin miniatura';
+    }
+  }
+
+  async function assign(code: number) {
+    const entry = entries[index];
+    try {
+      await cli.variableSet(dbPath, variable.name, [[entry.id, code]]);
+      entry.value = code;
+      showToast(`${entry.file_path.split(/[\\/]/).pop()}: ${optionLabel(code)}`);
+      goNext();
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    }
+  }
+
+  function goNext() {
+    if (index < entries.length - 1) {
+      index += 1;
+      render();
+    } else {
+      showToast('Llegaste a la última imagen');
+    }
+  }
+
+  function goPrev() {
+    if (index > 0) {
+      index -= 1;
+      render();
+    }
+  }
+
+  function onKeyDown(e: KeyboardEvent) {
+    if (isTypingTarget(e.target)) return;
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault();
+      goPrev();
+    } else if (e.key === 'ArrowRight' || e.key === ' ') {
+      e.preventDefault();
+      goNext();
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      goPrev();
+    } else {
+      const n = Number(e.key);
+      if (Number.isInteger(n) && validCodes().includes(n)) {
+        e.preventDefault();
+        assign(n);
+      }
+    }
+  }
+
+  document.addEventListener('keydown', onKeyDown);
+  render();
+
+  return () => document.removeEventListener('keydown', onKeyDown);
 }
