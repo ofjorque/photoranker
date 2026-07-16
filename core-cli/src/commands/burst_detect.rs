@@ -1,11 +1,13 @@
 //! `photoranker burst-detect --threshold` — ver docs/fase1-ingesta.md,
 //! "Detección y minitorneo de ráfagas".
 
-use crate::error::AppResult;
+use crate::db;
+use crate::error::{AppError, AppResult};
 use crate::phash;
 use rusqlite::{Connection, params};
 use serde_json::json;
 use std::collections::HashMap;
+use std::path::Path;
 
 struct DisjointSet {
     parent: Vec<usize>,
@@ -154,4 +156,210 @@ pub fn list_pending(conn: &Connection) -> AppResult<serde_json::Value> {
         .collect::<AppResult<Vec<_>>>()?;
 
     Ok(json!(bursts))
+}
+
+/// `list-bursts-resolved`: solo lectura, sin backup — bursts ya resueltos por
+/// `burst-tournament` (`status='completed'`), para la sección de "deshacer"
+/// de la GUI (ver fase1-ingesta.md, "Excluir/deshacer bursts").
+pub fn list_resolved(conn: &Connection) -> AppResult<serde_json::Value> {
+    let mut burst_stmt = conn.prepare(
+        "SELECT id, representative_image_id FROM bursts WHERE status = 'completed' ORDER BY id DESC",
+    )?;
+    let bursts_meta: Vec<(i64, Option<i64>)> = burst_stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+        .filter_map(|r| r.ok())
+        .collect();
+    drop(burst_stmt);
+
+    let mut member_stmt = conn.prepare(
+        "SELECT images.id, images.file_path, images.rejected FROM burst_members
+         JOIN images ON images.id = burst_members.image_id
+         WHERE burst_members.burst_id = ?1
+         ORDER BY images.id",
+    )?;
+
+    let bursts: Vec<serde_json::Value> = bursts_meta
+        .into_iter()
+        .map(|(burst_id, representative_image_id)| {
+            let members: Vec<serde_json::Value> = member_stmt
+                .query_map(params![burst_id], |r| {
+                    Ok(json!({
+                        "id": r.get::<_, i64>(0)?,
+                        "file_path": r.get::<_, String>(1)?,
+                        "rejected": r.get::<_, i64>(2)? != 0,
+                    }))
+                })?
+                .filter_map(|r| r.ok())
+                .collect();
+            Ok(json!({
+                "id": burst_id,
+                "representative_image_id": representative_image_id,
+                "images": members,
+            }))
+        })
+        .collect::<AppResult<Vec<_>>>()?;
+
+    Ok(json!(bursts))
+}
+
+/// `burst-exclude --burst-id --image-id ...`: saca imagen(es) de un burst
+/// **pendiente** (antes de resolver `burst-tournament`) — quedan como
+/// imágenes normales, ya elegibles para `tournament-next` sin ningún paso
+/// adicional (el pool del torneo principal no filtra por `burst_members`).
+/// Si tras excluir queda 1 solo miembro (o 0), el burst completo se disuelve
+/// — una "ráfaga" de una sola foto no es válida (ver fase1-ingesta.md,
+/// "Excluir/deshacer bursts").
+pub fn exclude(
+    conn: &mut Connection,
+    burst_id: i64,
+    image_ids: &[i64],
+) -> AppResult<serde_json::Value> {
+    let status: Option<String> = conn
+        .query_row(
+            "SELECT status FROM bursts WHERE id = ?1",
+            params![burst_id],
+            |r| r.get(0),
+        )
+        .ok();
+    let Some(status) = status else {
+        return Err(AppError::BurstNotFound(burst_id));
+    };
+    if status != "pending" {
+        return Err(AppError::InvalidRanking(format!(
+            "Burst {burst_id} ya fue resuelto por un minitorneo — usar burst-undo en vez de burst-exclude"
+        )));
+    }
+
+    let tx = conn.transaction()?;
+    for image_id in image_ids {
+        tx.execute(
+            "DELETE FROM burst_members WHERE burst_id = ?1 AND image_id = ?2",
+            params![burst_id, image_id],
+        )?;
+    }
+    let remaining: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM burst_members WHERE burst_id = ?1",
+        params![burst_id],
+        |r| r.get(0),
+    )?;
+    let dissolved = remaining < 2;
+    if dissolved {
+        tx.execute(
+            "DELETE FROM burst_members WHERE burst_id = ?1",
+            params![burst_id],
+        )?;
+        tx.execute("DELETE FROM bursts WHERE id = ?1", params![burst_id])?;
+    }
+    tx.commit()?;
+
+    Ok(json!({
+        "burst_id": burst_id,
+        "excluded": image_ids,
+        "burst_dissolved": dissolved,
+    }))
+}
+
+/// `burst-undo --burst-id [--image-id ...]`: revierte una resolución de
+/// `burst-tournament` (`status='completed'`, ver migración
+/// `011_burst_exclusion.sql` para `rejected_before`).
+///
+/// - Sin `image_ids`: deshace el burst completo — todos los miembros
+///   recuperan su `rejected_before`, y el burst vuelve a `status='pending'`
+///   con `representative_image_id=NULL` (queda disponible para resolver de
+///   nuevo).
+/// - Con `image_ids`: deshace solo esas imágenes (recuperan `rejected_before`
+///   y salen de `burst_members`, igual que `burst-exclude`); el resto del
+///   burst permanece `completed`. Si alguna de las imágenes es la
+///   representativa (`representative_image_id`), es un error explícito — no
+///   hay una "segunda mejor" obvia, hay que deshacer el burst completo.
+pub fn undo(
+    conn: &mut Connection,
+    db_path: &Path,
+    burst_id: i64,
+    image_ids: Option<&[i64]>,
+) -> AppResult<serde_json::Value> {
+    let (status, representative_image_id): (String, Option<i64>) = conn
+        .query_row(
+            "SELECT status, representative_image_id FROM bursts WHERE id = ?1",
+            params![burst_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .map_err(|_| AppError::BurstNotFound(burst_id))?;
+    if status != "completed" {
+        return Err(AppError::InvalidRanking(format!(
+            "Burst {burst_id} no está resuelto (status='{status}'); no hay nada que deshacer"
+        )));
+    }
+
+    db::backup(conn, db_path)?;
+
+    match image_ids {
+        None => {
+            let members: Vec<(i64, Option<i64>)> = {
+                let mut stmt = conn.prepare(
+                    "SELECT image_id, rejected_before FROM burst_members WHERE burst_id = ?1",
+                )?;
+                stmt.query_map(params![burst_id], |r| Ok((r.get(0)?, r.get(1)?)))?
+                    .filter_map(|r| r.ok())
+                    .collect()
+            };
+            let tx = conn.transaction()?;
+            for (image_id, rejected_before) in &members {
+                tx.execute(
+                    "UPDATE images SET rejected = ?1 WHERE id = ?2",
+                    params![rejected_before.unwrap_or(0), image_id],
+                )?;
+            }
+            tx.execute(
+                "UPDATE bursts SET status = 'pending', representative_image_id = NULL WHERE id = ?1",
+                params![burst_id],
+            )?;
+            tx.commit()?;
+            Ok(json!({
+                "burst_id": burst_id,
+                "reverted_images": members.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
+                "burst_status": "pending",
+            }))
+        }
+        Some(ids) => {
+            if let Some(rep) = representative_image_id
+                && ids.contains(&rep)
+            {
+                return Err(AppError::InvalidRanking(format!(
+                    "La imagen {rep} es la representativa del burst {burst_id}; deshacer el burst completo (sin --image-id) en vez de excluirla sola"
+                )));
+            }
+
+            let tx = conn.transaction()?;
+            let mut reverted = Vec::with_capacity(ids.len());
+            for image_id in ids {
+                let rejected_before: Option<i64> = tx
+                    .query_row(
+                        "SELECT rejected_before FROM burst_members WHERE burst_id = ?1 AND image_id = ?2",
+                        params![burst_id, image_id],
+                        |r| r.get(0),
+                    )
+                    .map_err(|_| {
+                        AppError::InvalidRanking(format!(
+                            "La imagen {image_id} no pertenece al burst {burst_id}"
+                        ))
+                    })?;
+                tx.execute(
+                    "UPDATE images SET rejected = ?1 WHERE id = ?2",
+                    params![rejected_before.unwrap_or(0), image_id],
+                )?;
+                tx.execute(
+                    "DELETE FROM burst_members WHERE burst_id = ?1 AND image_id = ?2",
+                    params![burst_id, image_id],
+                )?;
+                reverted.push(*image_id);
+            }
+            tx.commit()?;
+            Ok(json!({
+                "burst_id": burst_id,
+                "reverted_images": reverted,
+                "burst_status": "completed",
+            }))
+        }
+    }
 }

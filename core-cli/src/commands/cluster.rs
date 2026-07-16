@@ -135,7 +135,13 @@ fn best_k_from_bic(preview: &Value) -> AppResult<u32> {
         .ok_or_else(|| AppError::RSubprocessFailed("bic_by_k vacío".to_string()))
 }
 
-fn commit_raw(conn: &Connection, db_path: &Path, cfg: &Config, k: u32) -> AppResult<Value> {
+fn commit_raw(
+    conn: &Connection,
+    db_path: &Path,
+    cfg: &Config,
+    k: u32,
+    probability_threshold: f64,
+) -> AppResult<Value> {
     run_r_script(
         conn,
         cfg,
@@ -145,18 +151,27 @@ fn commit_raw(conn: &Connection, db_path: &Path, cfg: &Config, k: u32) -> AppRes
             "commit".to_string(),
             k.to_string(),
             cfg.variable_null_threshold.to_string(),
+            probability_threshold.to_string(),
         ],
     )
 }
 
 /// `cluster --k <N>` (o `cluster` sin `--k`, que primero corre un preview
 /// interno y elige el k de mayor BIC como fallback automático, ver
-/// fase2-clustering.md).
+/// fase2-clustering.md). `probability_threshold` (`None` = usar el default de
+/// `config.toml`, `cluster_probability_threshold`): si la probabilidad
+/// argmax de una imagen a su cluster asignado no lo supera, queda con
+/// `cluster_id = NULL` en vez de forzarla al cluster de todos modos — ver
+/// "Umbral de probabilidad de pertenencia" en fase2-clustering.md. El script
+/// R consulta `cached_cluster_fits` antes de reajustar (ver
+/// r/run_clustmd.R); el resultado indica `from_cache` para que quede
+/// visible cuándo se evitó una corrida nueva de `clustMD`.
 pub fn commit(
     conn: &mut Connection,
     db_path: &Path,
     cfg: &Config,
     k: Option<u32>,
+    probability_threshold: Option<f64>,
 ) -> AppResult<Value> {
     let chosen_k = match k {
         Some(k) => k,
@@ -165,7 +180,8 @@ pub fn commit(
             best_k_from_bic(&preview)?
         }
     };
-    let result = commit_raw(conn, db_path, cfg, chosen_k)?;
+    let threshold = probability_threshold.unwrap_or(cfg.cluster_probability_threshold);
+    let result = commit_raw(conn, db_path, cfg, chosen_k, threshold)?;
     Ok(strip_status(result))
 }
 

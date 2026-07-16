@@ -1,5 +1,15 @@
 //! `tournament-next` / `tournament-result` / `ranking` / `tournament-status` —
-//! ver docs/fase3-torneo.md, "Torneos Jerárquicos (Weng-Lin vía `skillratings`)".
+//! ver docs/fase3-torneo.md, "Torneos Jerárquicos (TrueSkill vía `skillratings`)".
+//!
+//! **Nota de migración (feedback de uso real: con pocas imágenes activas la
+//! sesión nunca converge)**: este módulo usaba Weng-Lin; se migró a TrueSkill
+//! por pedido explícito del usuario, avisándole que ambos son algoritmos
+//! bayesianos con una curva de reducción de incertidumbre similar, así que
+//! esto podría no resolver por sí solo la convergencia lenta con pocas fotos
+//! (ver simulación diagnóstica en los tests de este módulo). TrueSkill está
+//! patentado (ver docs de `skillratings::trueskill`) — el crate recomienda
+//! evitarlo en proyectos comerciales; PhotoRanker es de uso personal, pero
+//! queda señalado por si esto cambia.
 
 use crate::config::Config;
 use crate::db;
@@ -8,7 +18,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::{Value, json};
 use skillratings::{
     MultiTeamOutcome,
-    weng_lin::{WengLinConfig, WengLinRating, weng_lin_multi_team},
+    trueskill::{TrueSkillConfig, TrueSkillRating, trueskill_multi_team},
 };
 use std::collections::HashSet;
 use std::path::Path;
@@ -244,25 +254,29 @@ pub fn result(
         .map(|(id, _)| fetch_image_state(conn, *id))
         .collect::<AppResult<Vec<_>>>()?;
 
-    let teams: Vec<[WengLinRating; 1]> = states
+    let teams: Vec<[TrueSkillRating; 1]> = states
         .iter()
         .map(|s| {
-            [WengLinRating {
+            [TrueSkillRating {
                 rating: s.mu,
                 uncertainty: s.sigma,
             }]
         })
         .collect();
-    let rating_groups: Vec<(&[WengLinRating], MultiTeamOutcome)> = teams
+    let rating_groups: Vec<(&[TrueSkillRating], MultiTeamOutcome)> = teams
         .iter()
         .zip(ranking.iter())
         .map(|(team, (_, pos))| (team.as_slice(), MultiTeamOutcome::new(*pos as usize)))
         .collect();
-    let weng_lin_config = WengLinConfig {
-        beta: cfg.weng_lin_beta,
+    let trueskill_config = TrueSkillConfig {
+        beta: cfg.trueskill_beta,
         ..Default::default()
     };
-    let updated = weng_lin_multi_team(&rating_groups, &weng_lin_config);
+    // `weights=None` porque cada equipo es siempre una sola imagen (peso
+    // implícito 1.0 parejo) — el único caso en que `trueskill_multi_team`
+    // devuelve `Err` es con pesos explícitos mal formados, que no se usan acá.
+    let updated = trueskill_multi_team(&rating_groups, &trueskill_config, None)
+        .map_err(|e| AppError::TrueSkillError(e.to_string()))?;
 
     db::backup(conn, db_path)?;
 
@@ -639,47 +653,57 @@ mod tests {
     use super::*;
 
     /// Checklist de fase3-torneo.md, primer ítem: "no asumir" que
-    /// `weng_lin_multi_team` trata los empates de forma simétrica sin
-    /// probarlo. Dos equipos con el mismo `MultiTeamOutcome` (empate en 1°)
-    /// y el mismo rating de entrada deben terminar con el mismo mu/sigma.
+    /// `trueskill_multi_team` trata los empates de forma simétrica sin
+    /// probarlo. **Resultado real, distinto de Weng-Lin**: Weng-Lin (fórmula
+    /// cerrada) daba mu/sigma *exactamente* iguales para un empate
+    /// (tolerancia `1e-9`). TrueSkill usa un factor graph con inferencia
+    /// iterativa (message passing) internamente, que no es perfectamente
+    /// simétrico por orden de procesamiento — empíricamente la diferencia
+    /// entre dos equipos empatados fue de ~0.005 en `mu` (con beta=4.1667,
+    /// una diferencia irrelevante en la práctica frente al rango de sigma
+    /// 2.0-8.33), no cero. Se relaja la tolerancia a `0.05` en vez del
+    /// `1e-9` que tenía el test de Weng-Lin — sigue siendo una prueba real
+    /// (falla si el trato de empates se rompe del todo, ver el contraprueba
+    /// de abajo), pero no exige una simetría exacta que este algoritmo no
+    /// ofrece.
     #[test]
-    fn weng_lin_multi_team_treats_ties_symmetrically() {
-        let team_a = [WengLinRating {
+    fn trueskill_multi_team_treats_ties_symmetrically() {
+        let team_a = [TrueSkillRating {
             rating: 25.0,
             uncertainty: 8.33,
         }];
-        let team_b = [WengLinRating {
+        let team_b = [TrueSkillRating {
             rating: 25.0,
             uncertainty: 8.33,
         }];
-        let team_c = [WengLinRating {
+        let team_c = [TrueSkillRating {
             rating: 25.0,
             uncertainty: 8.33,
         }];
 
-        let rating_groups: Vec<(&[WengLinRating], MultiTeamOutcome)> = vec![
+        let rating_groups: Vec<(&[TrueSkillRating], MultiTeamOutcome)> = vec![
             (&team_a[..], MultiTeamOutcome::new(1)),
             (&team_b[..], MultiTeamOutcome::new(1)),
             (&team_c[..], MultiTeamOutcome::new(2)),
         ];
-        let config = WengLinConfig {
+        let config = TrueSkillConfig {
             beta: 4.1667,
             ..Default::default()
         };
-        let updated = weng_lin_multi_team(&rating_groups, &config);
+        let updated = trueskill_multi_team(&rating_groups, &config, None).unwrap();
 
         assert_eq!(updated.len(), 3);
         let a = updated[0][0];
         let b = updated[1][0];
         assert!(
-            (a.rating - b.rating).abs() < 1e-9,
-            "mu de empatados debería ser idéntico: {} vs {}",
+            (a.rating - b.rating).abs() < 0.05,
+            "mu de empatados debería ser aproximadamente igual: {} vs {}",
             a.rating,
             b.rating
         );
         assert!(
-            (a.uncertainty - b.uncertainty).abs() < 1e-9,
-            "sigma de empatados debería ser idéntico: {} vs {}",
+            (a.uncertainty - b.uncertainty).abs() < 0.05,
+            "sigma de empatados debería ser aproximadamente igual: {} vs {}",
             a.uncertainty,
             b.uncertainty
         );
@@ -689,25 +713,25 @@ mod tests {
     }
 
     #[test]
-    fn weng_lin_multi_team_asymmetric_ranks_break_the_tie() {
+    fn trueskill_multi_team_asymmetric_ranks_break_the_tie() {
         // Contraprueba: si NO empatan (ranks 1,2,3 distintos), el primero debe
         // terminar con mayor mu que el segundo — confirma que el test anterior
         // realmente está detectando el trato de empates y no un artefacto del
         // crate que iguala todo.
-        let team_a = [WengLinRating {
+        let team_a = [TrueSkillRating {
             rating: 25.0,
             uncertainty: 8.33,
         }];
-        let team_b = [WengLinRating {
+        let team_b = [TrueSkillRating {
             rating: 25.0,
             uncertainty: 8.33,
         }];
-        let rating_groups: Vec<(&[WengLinRating], MultiTeamOutcome)> = vec![
+        let rating_groups: Vec<(&[TrueSkillRating], MultiTeamOutcome)> = vec![
             (&team_a[..], MultiTeamOutcome::new(1)),
             (&team_b[..], MultiTeamOutcome::new(2)),
         ];
-        let config = WengLinConfig::new();
-        let updated = weng_lin_multi_team(&rating_groups, &config);
+        let config = TrueSkillConfig::new();
+        let updated = trueskill_multi_team(&rating_groups, &config, None).unwrap();
         assert!(updated[0][0].rating > updated[1][0].rating);
     }
 

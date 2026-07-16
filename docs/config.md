@@ -14,9 +14,10 @@ global_sync_every = 10         # cada cuántos resultados de grupo se hace upser
 cluster_min = 2               # rango mínimo de k para clustMD --preview — ver fase2-clustering.md
 cluster_max = 10               # rango máximo de k para clustMD --preview
 preview_size = 512            # resolución máxima (lado mayor) de la miniatura normalizada — ver fase1-ingesta.md
-weng_lin_beta = 4.1667        # beta de WengLinConfig, inyectado explícitamente (no el default silencioso del crate) — ver fase3-torneo.md
+trueskill_beta = 4.1667      # beta de TrueSkillConfig, inyectado explícitamente (no el default silencioso del crate) — ver fase3-torneo.md (migrado desde weng_lin_beta)
 min_global_sample = 20        # mínimo de imágenes en el índice global para usar cuantiles en vez del mapeo fijo de mu — ver fase4-exportacion.md
 variable_null_threshold = 0.20 # si una variable personalizada tiene >20% de NULL entre imágenes activas, se excluye del clustering
+cluster_probability_threshold = 0.0 # 0.0 = deshabilitado; si >0, una imagen cuya probabilidad de pertenencia (argmax) al cluster asignado no lo supere queda con cluster_id=NULL — ver fase2-clustering.md
 rscript_path = "Rscript"      # override si Rscript.exe no está en PATH, ej. "C:\\Program Files\\R\\R-4.3.0\\bin\\Rscript.exe"
 clustmd_seed = 42              # semilla fija para set.seed() en run_clustmd.R, garantiza resultados deterministas
 theme = "dark"                # tema embebido de la GUI ("dark" o "light") — ver fase5-gui.md

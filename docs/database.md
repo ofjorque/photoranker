@@ -9,7 +9,7 @@ CREATE TABLE project_meta (
     project_id TEXT PRIMARY KEY,  -- UUID v4 generado una sola vez en el primer init; init no lo regenera después
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     config_snapshot TEXT           -- JSON con los parámetros de config.toml vigentes al momento del primer init
-                                    -- (burst_threshold, cluster_min/max, weng_lin_beta, sigma_stop_threshold, etc.)
+                                    -- (burst_threshold, cluster_min/max, trueskill_beta, sigma_stop_threshold, etc.)
                                     -- — permite reproducir exactamente el comportamiento original de esta
                                     -- biblioteca aunque config.toml cambie después globalmente.
 );
@@ -69,6 +69,9 @@ CREATE TABLE burst_members (
     burst_id INTEGER NOT NULL,
     image_id INTEGER NOT NULL,
     similarity_score REAL,   -- distancia normalizada 0-1
+    rejected_before INTEGER, -- snapshot de images.rejected previo a burst-tournament
+                             -- (migración 011_burst_exclusion.sql), para poder
+                             -- deshacer con burst-undo sin asumir que siempre era 0
     PRIMARY KEY (burst_id, image_id)
 );
 CREATE INDEX idx_burst_members_image_id ON burst_members(image_id);
@@ -144,7 +147,7 @@ CREATE TABLE pending_tournament_groups (
 );
 
 -- Log/auditoría de resultados de torneo (no es el mecanismo de cálculo;
--- el cálculo real ocurre en una sola llamada a weng_lin_multi_team, ver
+-- el cálculo real ocurre en una sola llamada a trueskill_multi_team, ver
 -- fase3-torneo.md). group_id es un UUID v4 generado por el CLI en cada
 -- llamada a tournament-next (no por el cliente/GUI); el mismo valor debe
 -- reenviarse en tournament-result.

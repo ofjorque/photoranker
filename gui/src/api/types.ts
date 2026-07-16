@@ -39,6 +39,13 @@ export interface ClusterCommitResult {
    *  evitar un crash de clustMD con bloques categóricos de ancho 1, pero
    *  sigue participando del clustering (ver docs/fase2-clustering.md). */
   duplicated_solo_categorical?: string;
+  /** true si se reutilizó un modelo ya ajustado en un --preview anterior en
+   *  vez de volver a correr clustMD (ver docs/fase2-clustering.md, "Caché de
+   *  modelos ajustados"). */
+  from_cache?: boolean;
+  /** Cuántas imágenes quedaron con cluster_id=NULL por no superar
+   *  --probability-threshold (0 si el umbral está deshabilitado). */
+  below_probability_threshold?: number;
   [key: string]: unknown;
 }
 
@@ -179,6 +186,30 @@ export interface BurstImage {
 export interface PendingBurst {
   id: number;
   images: BurstImage[];
+}
+
+export interface ResolvedBurstImage {
+  id: number;
+  file_path: string;
+  rejected: boolean;
+}
+
+export interface ResolvedBurst {
+  id: number;
+  representative_image_id: number | null;
+  images: ResolvedBurstImage[];
+}
+
+export interface BurstExcludeResult {
+  burst_id: number;
+  excluded: number[];
+  burst_dissolved: boolean;
+}
+
+export interface BurstUndoResult {
+  burst_id: number;
+  reverted_images: number[];
+  burst_status: 'pending' | 'completed';
 }
 
 export interface TournamentUndoResult {

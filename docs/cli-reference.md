@@ -40,6 +40,16 @@ photoranker get-variable-values --variable "Grado de nostalgia"
 # Minitorneo de ráfaga (formato id:posición, permite empates)
 photoranker burst-tournament --burst-id 1 --ranking 12:1 8:2 4:3
 
+# Sacar una imagen de un burst pendiente (no era parte de la ráfaga)
+photoranker burst-exclude --burst-id 1 --image-id 8
+
+# Deshacer un burst ya resuelto (completo, o solo alguna(s) de sus imágenes)
+photoranker burst-undo --burst-id 1
+photoranker burst-undo --burst-id 1 --image-id 8
+
+# Listar bursts ya resueltos (para poder deshacerlos)
+photoranker list-bursts-resolved
+
 # --- Fase 2: Clustering (ver fase2-clustering.md) ---
 
 # Ver el BIC por número de clusters, sin comprometer resultados
@@ -47,6 +57,11 @@ photoranker cluster --preview
 
 # Comprometer clustering con un número de clusters elegido
 photoranker cluster --k 4
+
+# Igual, pero exigiendo probabilidad de pertenencia mínima 0.6 (si no,
+# cluster_id queda NULL) — ver "Umbral de probabilidad de pertenencia" en
+# fase2-clustering.md
+photoranker cluster --k 4 --probability-threshold 0.6
 
 # Renombrar un cluster antes de exportarlo como tag
 photoranker cluster-rename --id 3 --name "Retratos nocturnos"

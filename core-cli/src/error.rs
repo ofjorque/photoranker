@@ -43,6 +43,7 @@ pub enum AppError {
     RSubprocessFailed(String),
 
     #[error("Ranking incompleto: {0}")]
+    #[allow(dead_code)]
     IncompleteRanking(String),
 
     #[error("Argumento inválido: {0}")]
@@ -53,6 +54,9 @@ pub enum AppError {
 
     #[error("No hay ningún grupo de torneo para deshacer")]
     NothingToUndo,
+
+    #[error("Error interno de TrueSkill: {0}")]
+    TrueSkillError(String),
 }
 
 impl From<quick_xml::Error> for AppError {
@@ -81,6 +85,7 @@ impl AppError {
             AppError::InvalidArgument(_) => "INVALID_ARGUMENT",
             AppError::XmpParseError(_) => "XMP_PARSE_ERROR",
             AppError::NothingToUndo => "NOTHING_TO_UNDO",
+            AppError::TrueSkillError(_) => "TRUESKILL_ERROR",
         }
     }
 }

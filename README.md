@@ -5,7 +5,7 @@
 
 PhotoRanker es una suite de herramientas de escritorio (CLI + GUI) diseñada para fotógrafos que buscan organizar, clasificar y rankear grandes volúmenes de imágenes de manera lógica, matemática y sin fatiga de decisión.
 
-Usa un núcleo en **Rust** que se comunica con **R** (`clustMD`) para agrupar tus fotos por variables mixtas, las ordena de forma competitiva con el algoritmo estadístico **Weng-Lin** (crate `skillratings`), y exporta el resultado de forma 100% no destructiva a sidecars `.xmp` compatibles con **Darktable**. Todo navegable por teclado. Ver `docs/architecture.md` para el detalle de principios y arquitectura.
+Usa un núcleo en **Rust** que se comunica con **R** (`clustMD`) para agrupar tus fotos por variables mixtas, las ordena de forma competitiva con el algoritmo estadístico **TrueSkill** (crate `skillratings`, migrado desde Weng-Lin por feedback de uso real — ver `docs/fase3-torneo.md`), y exporta el resultado de forma 100% no destructiva a sidecars `.xmp` compatibles con **Darktable**. Todo navegable por teclado. Ver `docs/architecture.md` para el detalle de principios y arquitectura.
 
 ## Instalación rápida
 
@@ -42,7 +42,7 @@ Este README es solo la puerta de entrada. La especificación completa vive en `d
 - [`docs/fase0-scaffolding.md`](docs/fase0-scaffolding.md)
 - [`docs/fase1-ingesta.md`](docs/fase1-ingesta.md) — ingesta, ráfagas, métricas de calidad, `prune`
 - [`docs/fase2-clustering.md`](docs/fase2-clustering.md) — `clustMD` en R
-- [`docs/fase3-torneo.md`](docs/fase3-torneo.md) — Weng-Lin, interacción por teclado
+- [`docs/fase3-torneo.md`](docs/fase3-torneo.md) — TrueSkill, interacción por teclado
 - [`docs/fase4-exportacion.md`](docs/fase4-exportacion.md) — XMP
 - [`docs/fase5-gui.md`](docs/fase5-gui.md) — GUI Tauri
 - [`docs/fase6-fuera-de-alcance.md`](docs/fase6-fuera-de-alcance.md) — explícitamente fuera del MVP

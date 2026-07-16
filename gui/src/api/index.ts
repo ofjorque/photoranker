@@ -5,7 +5,9 @@ import { callCli, formatRankingArgs } from './cli';
 import { runPhotorankerAsync } from './asyncCli';
 import type {
   BurstDetectResult,
+  BurstExcludeResult,
   BurstTournamentResult,
+  BurstUndoResult,
   ClusterCommitResult,
   ClusterPreviewResult,
   ClusterRenameResult,
@@ -19,6 +21,7 @@ import type {
   PruneResult,
   RankingEntry,
   ResetGlobalIndexResult,
+  ResolvedBurst,
   ResyncGlobalResult,
   RetryThumbnailResult,
   TournamentNextResult,
@@ -42,8 +45,13 @@ function initArgs(path: string): string[] {
 function clusterPreviewArgs(dbPath: string): string[] {
   return ['cluster', '--preview', ...dbArgs(dbPath)];
 }
-function clusterCommitArgs(dbPath: string, k?: number): string[] {
-  return ['cluster', ...(k != null ? ['--k', String(k)] : []), ...dbArgs(dbPath)];
+function clusterCommitArgs(dbPath: string, k?: number, probabilityThreshold?: number): string[] {
+  return [
+    'cluster',
+    ...(k != null ? ['--k', String(k)] : []),
+    ...(probabilityThreshold != null ? ['--probability-threshold', String(probabilityThreshold)] : []),
+    ...dbArgs(dbPath),
+  ];
 }
 
 export const cli = {
@@ -64,6 +72,9 @@ export const cli = {
 
   listBursts: (dbPath: string) => callCli<PendingBurst[]>(['list-bursts', ...dbArgs(dbPath)]),
 
+  listBurstsResolved: (dbPath: string) =>
+    callCli<ResolvedBurst[]>(['list-bursts-resolved', ...dbArgs(dbPath)]),
+
   burstTournament: (dbPath: string, burstId: number, ranking: Array<[number, number]>) =>
     callCli<BurstTournamentResult>([
       'burst-tournament',
@@ -74,9 +85,29 @@ export const cli = {
       ...formatRankingArgs(ranking),
     ]),
 
+  burstExclude: (dbPath: string, burstId: number, imageIds: number[]) =>
+    callCli<BurstExcludeResult>([
+      'burst-exclude',
+      '--burst-id',
+      String(burstId),
+      ...dbArgs(dbPath),
+      '--image-id',
+      ...imageIds.map(String),
+    ]),
+
+  burstUndo: (dbPath: string, burstId: number, imageIds?: number[]) =>
+    callCli<BurstUndoResult>([
+      'burst-undo',
+      '--burst-id',
+      String(burstId),
+      ...dbArgs(dbPath),
+      ...(imageIds && imageIds.length > 0 ? ['--image-id', ...imageIds.map(String)] : []),
+    ]),
+
   clusterPreview: (dbPath: string) => callCli<ClusterPreviewResult>(clusterPreviewArgs(dbPath)),
 
-  clusterCommit: (dbPath: string, k?: number) => callCli<ClusterCommitResult>(clusterCommitArgs(dbPath, k)),
+  clusterCommit: (dbPath: string, k?: number, probabilityThreshold?: number) =>
+    callCli<ClusterCommitResult>(clusterCommitArgs(dbPath, k, probabilityThreshold)),
 
   clusterRename: (dbPath: string, id: number, name: string) =>
     callCli<ClusterRenameResult>([

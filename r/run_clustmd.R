@@ -7,11 +7,24 @@
 ##
 ## Uso:
 ##   Rscript run_clustmd.R <db_path> <seed> preview <k_min> <k_max> <null_threshold>
-##   Rscript run_clustmd.R <db_path> <seed> commit  <k>            <null_threshold>
+##   Rscript run_clustmd.R <db_path> <seed> commit  <k>            <null_threshold> <prob_threshold>
 ##
 ## Salida: una sola línea JSON a stdout (mismo sobre que el resto del CLI,
 ## ver docs/conventions.md):
 ##   {"status":"ok", ...}  o  {"status":"error","code":"...","message":"..."}
+##
+## NOTA sobre `cached_cluster_fits` (feedback de uso real: "cuando uno escoge
+## el modelo, la clusterización debería ser rápida y no volver a correr el
+## código"): `preview` persiste en SQLite + un .rds por disco el mejor modelo
+## ajustado (mayor BIChat) de cada k explorado. `commit` primero consulta esa
+## tabla por (k, data_fingerprint) — un hash determinista de las imágenes
+## activas + columnas usadas + seed, calculado con `tools::md5sum` sobre un
+## archivo temporal (no se agrega `digest` como dependencia nueva) — y si hay
+## coincidencia, hace `readRDS()` en vez de volver a llamar `clustMD()`. El
+## fingerprint deliberadamente NO incluye `prob_threshold`: ese umbral solo
+## afecta el paso final de asignación (`write_clusters`), no el ajuste EM en
+## sí, así que cambiarlo no debería invalidar la caché. Ver
+## docs/fase2-clustering.md, "Caché de modelos ajustados".
 ##
 ## NOTA sobre la convención de BIChat: clustMD reporta el BIC con la misma
 ## convención que mclust (proporcional a 2*logLik menos una penalización de
@@ -85,10 +98,14 @@ if (mode == "preview") {
     fail("k_min/k_max inválidos")
   }
 } else {
-  if (length(args) < 5) fail("commit requiere <k> <null_threshold>")
+  if (length(args) < 6) fail("commit requiere <k> <null_threshold> <prob_threshold>")
   k_commit <- suppressWarnings(as.integer(args[4]))
   variable_null_threshold <- suppressWarnings(as.numeric(args[5]))
+  prob_threshold <- suppressWarnings(as.numeric(args[6]))
   if (is.na(k_commit) || k_commit < 1) fail("k inválido")
+  if (is.na(prob_threshold) || prob_threshold < 0 || prob_threshold > 1) {
+    fail("prob_threshold inválido (debe estar entre 0 y 1)")
+  }
 }
 if (is.na(variable_null_threshold)) fail("variable_null_threshold inválido")
 
@@ -302,6 +319,65 @@ CnsIndx <- length(included_continuous)
 OrdIndx <- CnsIndx + length(ord_cols)
 included_all <- c(included_continuous, included_ordinal, included_nominal)
 
+## --- Caché de modelos ajustados (ver nota al inicio del archivo) ---
+
+cache_dir <- file.path(dirname(db_path), ".photoranker_cluster_cache")
+dir.create(cache_dir, showWarnings = FALSE, recursive = TRUE)
+
+# Fingerprint determinista de los datos de entrada del ajuste (imágenes
+# activas incluidas + columnas usadas + sus valores + seed): si cualquiera de
+# estos cambia entre una corrida de `preview`/`commit` y la siguiente, el
+# fingerprint cambia y la caché existente simplemente deja de matchear (no
+# hace falta invalidación explícita). Usa `tools::md5sum` (paquete base)
+# sobre un archivo temporal en vez de agregar `digest` como dependencia nueva.
+data_fingerprint <- local({
+  tmp <- tempfile()
+  on.exit(unlink(tmp), add = TRUE)
+  con_tmp <- file(tmp, "wb")
+  writeLines(paste(model_ids, collapse = ","), con_tmp)
+  writeLines(paste(colnames(full_mat), collapse = ","), con_tmp)
+  writeLines(paste(seed, variable_null_threshold, sep = ","), con_tmp)
+  write.table(round(model_data, 8), con_tmp)
+  close(con_tmp)
+  unname(tools::md5sum(tmp))
+})
+
+# Persiste el mejor modelo ajustado para un `g` dado (llamado desde `preview`
+# tras elegir el ganador entre `candidate_models`, y desde `commit` cuando no
+# hay caché aprovechable). Reemplaza cualquier fila previa con el mismo
+# (k, fingerprint) en vez de acumular duplicados entre corridas repetidas.
+cache_fit <- function(g, model_name, fit) {
+  rds_path <- file.path(
+    cache_dir,
+    sprintf("%s_k%d_%s.rds", data_fingerprint, g, model_name)
+  )
+  saveRDS(fit, rds_path)
+  dbExecute(
+    con, "DELETE FROM cached_cluster_fits WHERE k = ?1 AND data_fingerprint = ?2",
+    params = list(g, data_fingerprint)
+  )
+  dbExecute(
+    con, "INSERT INTO cached_cluster_fits (k, model, bic, data_fingerprint, rds_path) \
+          VALUES (?1, ?2, ?3, ?4, ?5)",
+    params = list(g, model_name, fit$BIChat, data_fingerprint, rds_path)
+  )
+}
+
+# Busca en la caché un ajuste ya hecho para (g, fingerprint actual). Devuelve
+# `NULL` si no hay coincidencia o si el archivo .rds ya no existe en disco
+# (ej. se borró la carpeta de caché manualmente) — en ese caso se reajusta
+# como si nunca hubiera existido, no se falla.
+cached_fit_for <- function(g) {
+  row <- dbGetQuery(
+    con, "SELECT rds_path FROM cached_cluster_fits WHERE k = ?1 AND data_fingerprint = ?2 LIMIT 1",
+    params = list(g, data_fingerprint)
+  )
+  if (nrow(row) == 0 || !file.exists(row$rds_path[1])) {
+    return(NULL)
+  }
+  readRDS(row$rds_path[1])
+}
+
 fit_one_model <- function(g, model) {
   tryCatch(
     {
@@ -335,24 +411,32 @@ fit_one_model <- function(g, model) {
   )
 }
 
-## Prueba cada estructura de covarianza de `candidate_models` para un G dado
-## y devuelve la de mayor BIChat (ver nota al inicio del archivo sobre por
-## qué no hay un único modelo fijo).
+## Prueba cada estructura de covarianza de `candidate_models` para un G dado y
+## devuelve la de mayor BIChat (ver nota al inicio del archivo sobre por qué
+## no hay un único modelo fijo), junto con el nombre del modelo ganador (para
+## poder cachearlo con su metadata completa).
 fit_one <- function(g) {
   best <- NULL
+  best_model_name <- NA_character_
   for (model in candidate_models) {
     fit <- fit_one_model(g, model)
     if (!is.null(fit) && (is.null(best) || fit$BIChat > best$BIChat)) {
       best <- fit
+      best_model_name <- model
     }
   }
-  best
+  list(fit = best, model = best_model_name)
 }
 
 ## Escribe clusters/image_clusters/images.cluster_id. Una corrida de
 ## `cluster` compromete una única partición vigente sobre las imágenes
 ## activas — reemplaza cualquier clustering previo en vez de acumularlo.
-write_clusters <- function(fit, g_used) {
+## `prob_threshold` (0 = deshabilitado): si la probabilidad de pertenencia
+## (argmax) de una imagen a su cluster asignado no lo supera, `images.cluster_id`
+## queda en NULL en vez del cluster argmax — la fila de `image_clusters` con la
+## probabilidad real se sigue insertando igual (ver fase2-clustering.md,
+## "Umbral de probabilidad de pertenencia").
+write_clusters <- function(fit, g_used, prob_threshold = 0) {
   dbExecute(con, "DELETE FROM image_clusters")
   dbExecute(con, "DELETE FROM clusters")
   dbExecute(con, "UPDATE images SET cluster_id = NULL")
@@ -376,6 +460,7 @@ write_clusters <- function(fit, g_used) {
     cluster_ids[i] <- dbGetQuery(con, "SELECT last_insert_rowid() AS id")$id
   }
 
+  below_threshold_count <- 0L
   for (row_i in seq_along(model_ids)) {
     image_id <- model_ids[row_i]
     for (g in seq_len(g_used)) {
@@ -387,21 +472,29 @@ write_clusters <- function(fit, g_used) {
         )
       }
     }
-    dbExecute(
-      con, "UPDATE images SET cluster_id = ? WHERE id = ?",
-      params = list(cluster_ids[fit$cl[row_i]], image_id)
-    )
+    assigned_cluster <- fit$cl[row_i]
+    assigned_probability <- fit$tau[row_i, assigned_cluster]
+    if (!is.na(assigned_probability) && assigned_probability < prob_threshold) {
+      below_threshold_count <- below_threshold_count + 1L
+      dbExecute(con, "UPDATE images SET cluster_id = NULL WHERE id = ?", params = list(image_id))
+    } else {
+      dbExecute(
+        con, "UPDATE images SET cluster_id = ? WHERE id = ?",
+        params = list(cluster_ids[assigned_cluster], image_id)
+      )
+    }
   }
 
-  cluster_ids
+  list(cluster_ids = cluster_ids, below_threshold = below_threshold_count)
 }
 
 if (mode == "preview") {
   bic_by_k <- list()
   for (g in cluster_min:cluster_max) {
-    fit <- fit_one(g)
-    if (!is.null(fit)) {
-      bic_by_k[[as.character(g)]] <- fit$BIChat
+    result_g <- fit_one(g)
+    if (!is.null(result_g$fit)) {
+      bic_by_k[[as.character(g)]] <- result_g$fit$BIChat
+      cache_fit(g, result_g$model, result_g$fit)
     }
   }
   if (length(bic_by_k) == 0) fail("ningún valor de k en el rango solicitado convergió")
@@ -416,10 +509,20 @@ if (mode == "preview") {
   )
   cat(toJSON(result, auto_unbox = TRUE))
 } else {
-  fit <- fit_one(k_commit)
-  if (is.null(fit)) fail(sprintf("clustMD no convergió para k=%d", k_commit))
+  # Consulta la caché antes de reajustar (ver nota al inicio del archivo) —
+  # así elegir un k ya explorado en un `--preview` anterior es una consulta,
+  # no una corrida nueva de EM.
+  fit <- cached_fit_for(k_commit)
+  from_cache <- !is.null(fit)
+  if (is.null(fit)) {
+    result_k <- fit_one(k_commit)
+    fit <- result_k$fit
+    if (is.null(fit)) fail(sprintf("clustMD no convergió para k=%d", k_commit))
+    cache_fit(k_commit, result_k$model, fit)
+  }
 
-  cluster_ids <- dbWithTransaction(con, write_clusters(fit, k_commit))
+  write_result <- dbWithTransaction(con, write_clusters(fit, k_commit, prob_threshold))
+  cluster_ids <- write_result$cluster_ids
 
   result <- list(
     status = "ok",
@@ -428,7 +531,9 @@ if (mode == "preview") {
     n_assigned = nrow(model_data),
     excluded_variables = excluded_variables,
     excluded_zero_variance = excluded_zero_variance,
-    duplicated_solo_categorical = duplicated_solo_categorical
+    duplicated_solo_categorical = duplicated_solo_categorical,
+    from_cache = from_cache,
+    below_probability_threshold = write_result$below_threshold
   )
   cat(toJSON(result, auto_unbox = TRUE))
 }

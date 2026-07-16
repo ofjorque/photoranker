@@ -50,7 +50,7 @@ Para evitar que se propongan librerías distintas entre módulos, estas son las 
 | `thiserror` | Definición de errores tipados por módulo |
 | `anyhow` | Propagación de errores en los bordes (`main.rs`) |
 | `tracing`, `tracing-subscriber` | Logging estructurado (ver "Logging") |
-| `skillratings` | Motor de torneo Weng-Lin |
+| `skillratings` | Motor de torneo TrueSkill (migrado desde Weng-Lin, ver fase3-torneo.md) |
 | `ratatui`, `ratatui-image` | Modo TUI (`variable-tag`); `ratatui-image` maneja la detección de backend (Kitty/Sixel/ASCII) |
 | `base64` | Codificación de `images.thumbnail` (BLOB) a texto para `get-thumbnail`, el único punto donde la GUI recibe bytes de imagen vía JSON (ver fase5-gui.md) |
 

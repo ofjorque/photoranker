@@ -61,6 +61,19 @@ pub fn run(
 
     let tx = conn.transaction()?;
     for &(image_id, _) in ranking {
+        // Snapshot de `rejected` previo a la resolución (migración
+        // 011_burst_exclusion.sql) — permite que `burst-undo` restaure el
+        // valor real anterior en vez de asumir que siempre era 0 (ver
+        // fase1-ingesta.md, "Excluir/deshacer bursts").
+        let rejected_before: i64 = tx.query_row(
+            "SELECT rejected FROM images WHERE id = ?1",
+            params![image_id],
+            |r| r.get(0),
+        )?;
+        tx.execute(
+            "UPDATE burst_members SET rejected_before = ?1 WHERE burst_id = ?2 AND image_id = ?3",
+            params![rejected_before, burst_id, image_id],
+        )?;
         let rejected = i32::from(image_id != winner);
         tx.execute(
             "UPDATE images SET rejected = ?1 WHERE id = ?2",

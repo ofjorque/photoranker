@@ -149,6 +149,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
           </div>
           <button class="btn btn-primary" id="commit-btn">cluster --k</button>
         </div>
+        <div id="prob-threshold-row"></div>
         <div id="commit-result" style="margin-top:12px"></div>
       </div>
 
@@ -161,8 +162,32 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
 
   const screeContainer = container.querySelector<HTMLElement>('#scree-plot')!;
   const clustersListContainer = container.querySelector<HTMLElement>('#clusters-list')!;
+  const probThresholdRow = container.querySelector<HTMLElement>('#prob-threshold-row')!;
 
   await renderClustersList(clustersListContainer, dbPath);
+
+  // Divulgación progresiva (feedback de uso real: "se ve básica, que
+  // aparezcan/desaparezcan cosas según lo que uno ya eligió"): el umbral de
+  // probabilidad de pertenencia solo tiene sentido una vez que el usuario ya
+  // vio el BIC por k en el scree plot, así que no se muestra hasta entonces.
+  function revealProbabilityThreshold(): void {
+    if (probThresholdRow.dataset.revealed === 'true') return;
+    probThresholdRow.dataset.revealed = 'true';
+    probThresholdRow.className = 'field disclosure';
+    probThresholdRow.style.marginTop = '12px';
+    probThresholdRow.innerHTML = `
+      <label>Umbral mínimo de probabilidad de pertenencia (0 = deshabilitado)</label>
+      <div class="range-row">
+        <input type="range" id="prob-threshold-input" min="0" max="1" step="0.05" value="0" />
+        <span class="range-value" id="prob-threshold-value">0.00</span>
+      </div>
+    `;
+    const rangeInput = probThresholdRow.querySelector<HTMLInputElement>('#prob-threshold-input')!;
+    const rangeValue = probThresholdRow.querySelector<HTMLElement>('#prob-threshold-value')!;
+    rangeInput.addEventListener('input', () => {
+      rangeValue.textContent = Number(rangeInput.value).toFixed(2);
+    });
+  }
 
   container.querySelector('#preview-btn')?.addEventListener('click', async () => {
     // Sin cancelar/streaming a propósito, a diferencia de init: cluster
@@ -175,6 +200,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
         cli.clusterPreview(dbPath),
       );
       renderScreePlot(screeContainer, data.bic_by_k);
+      revealProbabilityThreshold();
     } catch (e) {
       screeContainer.innerHTML = `<div class="empty-state">${
         e instanceof CliError ? e.message : String(e)
@@ -186,16 +212,19 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
   container.querySelector('#commit-btn')?.addEventListener('click', async () => {
     const kInput = container.querySelector<HTMLInputElement>('#k-input')!;
     const k = kInput.value.trim() === '' ? undefined : Number(kInput.value);
+    const rangeInput = container.querySelector<HTMLInputElement>('#prob-threshold-input');
+    const probabilityThreshold =
+      rangeInput && Number(rangeInput.value) > 0 ? Number(rangeInput.value) : undefined;
     try {
       const data = await withLoadingOverlay('Corriendo clustMD (R)…', COMMIT_PHASES, () =>
-        cli.clusterCommit(dbPath, k),
+        cli.clusterCommit(dbPath, k, probabilityThreshold),
       );
       commitResult.innerHTML = `<pre class="mono" style="white-space:pre-wrap">${JSON.stringify(
         data,
         null,
         2,
       )}</pre>`;
-      showToast('Clustering comprometido');
+      showToast(data.from_cache ? 'Clustering comprometido (modelo reutilizado de la caché)' : 'Clustering comprometido');
       await renderClustersList(clustersListContainer, dbPath);
     } catch (e) {
       const msg = e instanceof CliError ? e.message : String(e);

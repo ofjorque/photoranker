@@ -6,7 +6,7 @@
 
 PhotoRanker es una suite de herramientas de escritorio (CLI + GUI) diseñada para fotógrafos que buscan organizar, clasificar y rankear grandes volúmenes de imágenes de manera lógica, matemática y sin fatiga de decisión.
 
-Optimizado para flujos de trabajo en **RAW** (compatible con JPEG; **HEIC** solo en la medida en que traiga una miniatura JPEG embebida extraíble igual que un RAW — el toolchain del MVP, `image`/`imageproc`/`rawloader`, no decodifica HEIC completo, que requeriría `libheif` como dependencia adicional de sistema; si un HEIC no trae miniatura embebida legible, sigue el mismo camino que un RAW sin preview: `thumbnail_status='failed'`), PhotoRanker utiliza un núcleo escrito en **Rust** que se comunica con **R** para agrupar tus fotos mediante modelos de clases latentes (`clustMD`). Luego, las ordena de forma competitiva usando el algoritmo de emparejamiento estadístico **Weng-Lin**, implementado mediante el crate **`skillratings`**. Todo esto manteniendo una integración 100% no destructiva compatible con **Darktable** mediante sincronización diferida con archivos `.xmp`.
+Optimizado para flujos de trabajo en **RAW** (compatible con JPEG; **HEIC** solo en la medida en que traiga una miniatura JPEG embebida extraíble igual que un RAW — el toolchain del MVP, `image`/`imageproc`/`rawloader`, no decodifica HEIC completo, que requeriría `libheif` como dependencia adicional de sistema; si un HEIC no trae miniatura embebida legible, sigue el mismo camino que un RAW sin preview: `thumbnail_status='failed'`), PhotoRanker utiliza un núcleo escrito en **Rust** que se comunica con **R** para agrupar tus fotos mediante modelos de clases latentes (`clustMD`). Luego, las ordena de forma competitiva usando el algoritmo de emparejamiento estadístico **TrueSkill**, implementado mediante el crate **`skillratings`** (migrado desde Weng-Lin — ver "Torneos Jerárquicos" en `fase3-torneo.md` para el porqué). Todo esto manteniendo una integración 100% no destructiva compatible con **Darktable** mediante sincronización diferida con archivos `.xmp`.
 
 La interacción principal es **100% navegable por teclado**: el usuario nunca necesita el mouse para completar un torneo.
 
@@ -16,7 +16,7 @@ La interacción principal es **100% navegable por teclado**: el usuario nunca ne
 
 - El usuario siempre toma la decisión final; el sistema sugiere y ordena, nunca decide por él.
 - Nunca se modifica un RAW: todo el trabajo es no destructivo, solo se escriben sidecars `.xmp`.
-- Todos los algoritmos son explicables: estadística clásica (`clustMD`, Weng-Lin, percentiles), sin cajas negras.
+- Todos los algoritmos son explicables: estadística clásica (`clustMD`, TrueSkill, percentiles), sin cajas negras.
 - No se usan modelos de IA/Machine Learning para clasificar o decidir sobre las imágenes.
 - Los resultados son deterministas dadas las mismas entradas y configuración (mismo `.photoranker.sqlite` + mismo `config.toml` → mismo resultado).
 - Todo el estado persistente vive en SQLite y XMP — sin formatos propietarios ni bases de datos externas obligatorias.
@@ -48,7 +48,7 @@ PhotoRanker está construido bajo la filosofía **CLI-First**. El verdadero "cer
 │  - Escaneo recursivo y extracción de miniaturas             │
 │  - Hashing perceptual (pHash)                               │
 │  - Métricas objetivas de calidad (nitidez, color, etc.)      │
-│  - Motor del Torneo Weng-Lin (crate skillratings)           │
+│  - Motor del Torneo TrueSkill (crate skillratings)          │
 │  - Lógica de lectura/escritura XMP (Batch)                  │
 └──────┬───────────────────────────────┬───────────────┬─────┘
        │ (Lee/Escribe estado)          │ (Llama subproc.)│ (Upsert)

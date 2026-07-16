@@ -61,6 +61,35 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Saca imagen(es) de un burst pendiente antes de resolverlo — quedan
+    /// como imágenes normales, elegibles para el torneo principal.
+    #[command(name = "burst-exclude")]
+    BurstExclude {
+        #[arg(long = "burst-id")]
+        burst_id: i64,
+        #[arg(long = "image-id", num_args = 1.., required = true)]
+        image_id: Vec<i64>,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Deshace la resolución de un burst (`burst-tournament`) completo, o
+    /// solo alguna(s) de sus imágenes.
+    #[command(name = "burst-undo")]
+    BurstUndo {
+        #[arg(long = "burst-id")]
+        burst_id: i64,
+        #[arg(long = "image-id", num_args = 1..)]
+        image_id: Option<Vec<i64>>,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+    /// Lista los bursts ya resueltos (`burst-tournament`), para poder
+    /// deshacerlos.
+    #[command(name = "list-bursts-resolved")]
+    ListBurstsResolved {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Crea una variable personalizada (ordinal o nominal).
     #[command(name = "variable-create")]
     VariableCreate {
@@ -116,6 +145,11 @@ enum Commands {
         preview: bool,
         #[arg(long)]
         k: Option<u32>,
+        /// Probabilidad mínima de pertenencia (argmax) para asignar el
+        /// cluster; si no se supera, la imagen queda con cluster_id=NULL.
+        /// Default: `cluster_probability_threshold` de config.toml.
+        #[arg(long = "probability-threshold")]
+        probability_threshold: Option<f64>,
         #[arg(long)]
         db: Option<PathBuf>,
     },
@@ -297,6 +331,29 @@ fn run(cli: Cli) -> AppResult<Value> {
                 .collect::<Vec<_>>();
             commands::burst_tournament::run(&mut conn, &db_path, burst_id, &pairs)
         }
+        Commands::BurstExclude {
+            burst_id,
+            image_id,
+            db,
+        } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::burst_detect::exclude(&mut conn, burst_id, &image_id)
+        }
+        Commands::BurstUndo {
+            burst_id,
+            image_id,
+            db,
+        } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::burst_detect::undo(&mut conn, &db_path, burst_id, image_id.as_deref())
+        }
+        Commands::ListBurstsResolved { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::burst_detect::list_resolved(&conn)
+        }
         Commands::VariableCreate {
             name,
             var_type,
@@ -338,7 +395,12 @@ fn run(cli: Cli) -> AppResult<Value> {
             let mut conn = db::open_local(&db_path)?;
             commands::variable_tag::run(&mut conn, &variable)
         }
-        Commands::Cluster { preview, k, db } => {
+        Commands::Cluster {
+            preview,
+            k,
+            probability_threshold,
+            db,
+        } => {
             if preview && k.is_some() {
                 return Err(AppError::InvalidArgument(
                     "--preview y --k son mutuamente excluyentes".to_string(),
@@ -350,7 +412,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             if preview {
                 commands::cluster::preview(&conn, &db_path, &cfg)
             } else {
-                commands::cluster::commit(&mut conn, &db_path, &cfg, k)
+                commands::cluster::commit(&mut conn, &db_path, &cfg, k, probability_threshold)
             }
         }
         Commands::ListClusters { db } => {
