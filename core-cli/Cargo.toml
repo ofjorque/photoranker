@@ -2,7 +2,10 @@
 name = "photoranker"
 version = "0.1.0"
 edition = "2024"
+description = "Curación fotográfica cuantitativa: agrupa, rankea (TrueSkill) y exporta a XMP, sin cajas negras"
+authors = ["Felrac <ofjorque@gmail.com>"]
 license = "GPL-3.0-only"
+repository = "https://github.com/ofjorque/photoranker"
 
 [dependencies]
 anyhow = "1.0.103"

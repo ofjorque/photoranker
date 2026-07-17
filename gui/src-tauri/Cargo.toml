@@ -1,10 +1,11 @@
 [package]
 name = "gui"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "GUI de escritorio de PhotoRanker (Tauri) — envoltura visual del CLI, sin lógica propia"
+authors = ["Felrac <ofjorque@gmail.com>"]
 edition = "2024"
 license = "GPL-3.0-only"
+repository = "https://github.com/ofjorque/photoranker"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

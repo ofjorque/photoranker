@@ -28,6 +28,12 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "publisher": "Felrac",
+    "copyright": "Copyright © 2026 Felrac",
+    "homepage": "https://github.com/ofjorque/photoranker",
+    "shortDescription": "Curación fotográfica cuantitativa, inteligente y sin cajas negras",
+    "longDescription": "PhotoRanker agrupa las fotos por similitud, las hace competir entre sí con TrueSkill hasta armar un ranking objetivo, y exporta el resultado a sidecars XMP sin tocar los RAW originales — sin ningún modelo de IA opaco decidiendo por detrás.",
+    "category": "Photography",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
