@@ -7,9 +7,12 @@
 ### 1. Dependencias del Sistema
 
 - R para Windows (https://cran.r-project.org/bin/windows/base/)
-- Instalar el paquete `clustMD` y sus dependencias de acceso a SQLite:
+- Instalar el paquete `clustMD`, sus dependencias de acceso a SQLite, la
+  serialización JSON, y el ajuste paralelo del grid k×modelo en
+  `--preview`/`--k` (ver `fase2-clustering.md`, "Ajuste paralelo del grid
+  k×modelo"):
   ```R
-  install.packages(c("clustMD", "RSQLite", "DBI"))
+  install.packages(c("clustMD", "RSQLite", "DBI", "jsonlite", "purrr", "future", "furrr"))
   ```
 - Asegúrate de que `Rscript.exe` esté en el PATH del sistema (o configura `rscript_path` en `config.toml`, ver `config.md`).
 

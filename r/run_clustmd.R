@@ -49,6 +49,27 @@
 ## (candidate_models más abajo) y se usa el de mayor BIChat — no un solo
 ## modelo fijo.
 
+## NOTA sobre el ajuste paralelo del grid k×modelo (agregado post-MVP, ver
+## docs/fase2-clustering.md, "Ajuste paralelo del grid k×modelo"): `preview`
+## prueba TODOS los `k` del rango solicitado × los 4 `candidate_models` de
+## una sola vez, repartidos entre varios procesos R vía `future`/`furrr`
+## (`plan(multisession, ...)`, portable en Windows — a diferencia de
+## `parallel::mclapply`, que usa fork de Unix y no funciona acá). Los
+## workers SOLO ajustan el modelo (`fit_one_model`); ninguno toca la
+## conexión SQLite (`con`) — cada worker es un proceso R separado que no la
+## hereda, y aunque la heredara, varios procesos escribiendo el mismo
+## archivo SQLite a la vez no es seguro pese a WAL+busy_timeout. Todas las
+## escrituras a `cached_cluster_fits` (`cache_fit`) se hacen desde el
+## proceso principal, después de juntar los resultados de todos los
+## workers. El determinismo (ver architecture.md) se preserva con
+## `furrr_options(seed = TRUE)`: dado el mismo `clustmd_seed`, cada
+## combinación (k, modelo) recibe una semilla derivada determinística,
+## independiente de en qué worker o en qué orden termine de ejecutarse — la
+## secuencia exacta de llamadas a los generadores de números aleatorios ya
+## no es idéntica a la versión secuencial original, pero el resultado sí es
+## reproducible corrida a corrida con la misma semilla, que es la garantía
+## que pide el proyecto, no la traza interna del RNG.
+
 candidate_models <- c("EII", "VII", "EEI", "VEI")
 
 suppressPackageStartupMessages({
@@ -56,6 +77,9 @@ suppressPackageStartupMessages({
   library(RSQLite)
   library(clustMD)
   library(jsonlite)
+  library(purrr)
+  library(future)
+  library(furrr)
 })
 
 fail <- function(message, code = "R_SUBPROCESS_FAILED") {
@@ -110,6 +134,13 @@ if (mode == "preview") {
 if (is.na(variable_null_threshold)) fail("variable_null_threshold inválido")
 
 set.seed(seed)
+
+## Pool de workers para el ajuste paralelo del grid k×modelo (ver nota al
+## inicio del archivo). `omit = 1` deja 1 core libre para el resto del
+## sistema; `max(1L, ...)` es una red de seguridad extra para máquinas de 1
+## solo core, aunque `future::availableCores()` ya garantiza mínimo 1.
+plan(multisession, workers = max(1L, future::availableCores(omit = 1)))
+on.exit(plan(sequential), add = TRUE)
 
 con <- dbConnect(RSQLite::SQLite(), db_path)
 on.exit(dbDisconnect(con), add = TRUE)
@@ -411,21 +442,40 @@ fit_one_model <- function(g, model) {
   )
 }
 
-## Prueba cada estructura de covarianza de `candidate_models` para un G dado y
-## devuelve la de mayor BIChat (ver nota al inicio del archivo sobre por qué
-## no hay un único modelo fijo), junto con el nombre del modelo ganador (para
-## poder cachearlo con su metadata completa).
+## Ajusta clustMD para cada combinación (g, modelo) de `g_values` ×
+## `candidate_models` en paralelo (ver nota al inicio del archivo). Devuelve
+## una lista plana de `list(g=, model=, fit=)`, un elemento por combinación
+## (fit = NULL si esa combinación no convergió) — la agregación (elegir la
+## de mayor BIChat por g, escribir a caché) queda a cargo del llamador,
+## siempre en el proceso principal.
+fit_grid <- function(g_values) {
+  grid <- expand.grid(g = g_values, model = candidate_models, stringsAsFactors = FALSE)
+  furrr::future_pmap(
+    grid,
+    function(g, model) list(g = g, model = model, fit = fit_one_model(g, model)),
+    .options = furrr::furrr_options(seed = TRUE, packages = "clustMD")
+  )
+}
+
+## Se queda con el elemento de mayor BIChat de una lista de resultados de
+## `fit_grid` (ver nota al inicio del archivo sobre la convención de
+## BIChat). `NULL` si ninguno convergió.
+best_result <- function(candidates) {
+  candidates <- purrr::keep(candidates, ~ !is.null(.x$fit))
+  if (length(candidates) == 0) return(NULL)
+  candidates[[which.max(purrr::map_dbl(candidates, ~ .x$fit$BIChat))]]
+}
+
+## Prueba cada estructura de covarianza de `candidate_models` para un G dado
+## (en paralelo) y devuelve la de mayor BIChat (ver nota al inicio del
+## archivo sobre por qué no hay un único modelo fijo), junto con el nombre
+## del modelo ganador (para poder cachearlo con su metadata completa). Usado
+## por `commit` cuando no hay caché aprovechable para un solo k — para el
+## rango completo de `preview` se usa `fit_grid` directamente, para
+## paralelizar los k también entre sí y no solo los modelos.
 fit_one <- function(g) {
-  best <- NULL
-  best_model_name <- NA_character_
-  for (model in candidate_models) {
-    fit <- fit_one_model(g, model)
-    if (!is.null(fit) && (is.null(best) || fit$BIChat > best$BIChat)) {
-      best <- fit
-      best_model_name <- model
-    }
-  }
-  list(fit = best, model = best_model_name)
+  best <- best_result(fit_grid(g))
+  if (is.null(best)) list(fit = NULL, model = NA_character_) else list(fit = best$fit, model = best$model)
 }
 
 ## Escribe clusters/image_clusters/images.cluster_id. Una corrida de
@@ -489,15 +539,20 @@ write_clusters <- function(fit, g_used, prob_threshold = 0) {
 }
 
 if (mode == "preview") {
-  bic_by_k <- list()
-  for (g in cluster_min:cluster_max) {
-    result_g <- fit_one(g)
-    if (!is.null(result_g$fit)) {
-      bic_by_k[[as.character(g)]] <- result_g$fit$BIChat
-      cache_fit(g, result_g$model, result_g$fit)
-    }
+  ## Todo el rango de k × los 4 candidate_models se manda de una sola vez al
+  ## pool de workers (ver fit_grid) — no un k a la vez como en la versión
+  ## secuencial original. `split()` agrupa por k, `best_result` se queda con
+  ## el modelo ganador de cada grupo, y solo entonces (ya en el proceso
+  ## principal) se escribe a la caché.
+  grid_results <- fit_grid(cluster_min:cluster_max)
+  by_g <- split(grid_results, purrr::map_dbl(grid_results, "g"))
+  best_by_g <- purrr::compact(purrr::map(by_g, best_result))
+  if (length(best_by_g) == 0) {
+    fail("ningún valor de k en el rango solicitado convergió")
   }
-  if (length(bic_by_k) == 0) fail("ningún valor de k en el rango solicitado convergió")
+
+  purrr::iwalk(best_by_g, ~ cache_fit(.x$g, .x$model, .x$fit))
+  bic_by_k <- purrr::map(best_by_g, ~ .x$fit$BIChat)
 
   result <- list(
     status = "ok",

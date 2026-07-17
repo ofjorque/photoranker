@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Loader2, Info } from 'lucide-react';
 import { Html } from '@/components/Html';
 import { openLightbox } from '@/components/Lightbox';
@@ -51,10 +52,14 @@ export function ClusterView() {
       for (const cluster of data) {
         newRenames[cluster.id] = cluster.name ?? '';
         for (const img of cluster.representative_images) {
-          if (!thumbnails[img.id]) {
-            const url = await getThumbnailDataUrl(project.dbPath, img.id);
-            if (url) newThumbnails[img.id] = url;
-          }
+          // getThumbnailDataUrl ya cachea en memoria por (dbPath, imageId) —
+          // no hace falta chequear `thumbnails` acá (y no conviene: si esta
+          // función dependiera de `thumbnails`, cada `setThumbnails` de más
+          // abajo recrearía `loadClusters`, lo que retrigger-ea el efecto que
+          // la llama y produce un loop de refetch infinito — la causa real
+          // del flicker reportado en la grilla de clusters).
+          const url = await getThumbnailDataUrl(project.dbPath, img.id);
+          if (url) newThumbnails[img.id] = url;
         }
       }
       setThumbnails(prev => ({ ...prev, ...newThumbnails }));
@@ -64,7 +69,7 @@ export function ClusterView() {
     } finally {
       setListLoading(false);
     }
-  }, [project, thumbnails]);
+  }, [project]);
 
   useEffect(() => {
     loadClusters();
@@ -230,12 +235,14 @@ export function ClusterView() {
                   >
                     {cluster.representative_images.map(img => (
                       <div key={img.id} className="relative aspect-square bg-muted rounded overflow-hidden">
-                        {thumbnails[img.id] && (
+                        {thumbnails[img.id] ? (
                           <img
                             src={thumbnails[img.id]}
                             className="w-full h-full object-cover cursor-zoom-in"
                             onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
                           />
+                        ) : (
+                          <Skeleton className="w-full h-full rounded-none" />
                         )}
                         <button
                           type="button"
