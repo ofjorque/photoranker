@@ -4,6 +4,7 @@
 // sigue acotada a `preview_size` (ver config.md), así que el zoom agranda en
 // pantalla lo que ya existe, no revela más resolución real del archivo.
 import './lightbox.css';
+import { icons } from './icons';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
@@ -19,7 +20,7 @@ export function openLightbox(src: string, alt = ''): void {
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'lightbox-close';
-  closeBtn.textContent = '✕';
+  closeBtn.innerHTML = icons.close;
   closeBtn.title = 'Cerrar (Esc)';
 
   const stage = document.createElement('div');
@@ -34,13 +35,13 @@ export function openLightbox(src: string, alt = ''): void {
   const controls = document.createElement('div');
   controls.className = 'lightbox-controls';
   const zoomOutBtn = document.createElement('button');
-  zoomOutBtn.textContent = '−';
+  zoomOutBtn.innerHTML = icons.zoomOut;
   zoomOutBtn.title = 'Alejar';
   const resetBtn = document.createElement('button');
-  resetBtn.textContent = '1:1';
-  resetBtn.title = 'Restablecer zoom';
+  resetBtn.innerHTML = icons.zoomReset;
+  resetBtn.title = 'Restablecer zoom (1:1)';
   const zoomInBtn = document.createElement('button');
-  zoomInBtn.textContent = '+';
+  zoomInBtn.innerHTML = icons.zoomIn;
   zoomInBtn.title = 'Acercar';
   controls.appendChild(zoomOutBtn);
   controls.appendChild(resetBtn);
@@ -80,11 +81,27 @@ export function openLightbox(src: string, alt = ''): void {
     overlay.remove();
   }
 
+  // Foco atrapado dentro del overlay (gap identificado en el reporte de
+  // exploración de la GUI: Tab podía escapar hacia la página de atrás) —
+  // mismo criterio que ConfirmDialog.ts.
+  const focusable = [zoomOutBtn, resetBtn, zoomInBtn, closeBtn];
+
   function onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Escape') close();
-    else if (e.key === '+' || e.key === '=') setScale(scale + SCALE_STEP);
+    if (e.key === 'Escape') {
+      close();
+      return;
+    }
+    if (e.key === '+' || e.key === '=') setScale(scale + SCALE_STEP);
     else if (e.key === '-') setScale(scale - SCALE_STEP);
     else if (e.key === '0') setScale(1);
+    else if (e.key === 'Tab') {
+      const currentIndex = focusable.indexOf(document.activeElement as HTMLButtonElement);
+      e.preventDefault();
+      const nextIndex = e.shiftKey
+        ? (currentIndex - 1 + focusable.length) % focusable.length
+        : (currentIndex + 1) % focusable.length;
+      focusable[nextIndex].focus();
+    }
   }
 
   overlay.addEventListener('click', (e) => {
@@ -126,6 +143,7 @@ export function openLightbox(src: string, alt = ''): void {
   });
 
   document.addEventListener('keydown', onKeyDown);
+  closeBtn.focus();
 }
 
 /** Marca `el` como clickeable para abrir `src` en el lightbox (agrega el cursor de zoom-in). */

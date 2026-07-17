@@ -94,6 +94,50 @@ p {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  transition: width 0.15s ease;
+}
+
+/* Modo colapsado (solo íconos) — estilo Darktable: los paneles/grupos de
+   módulos se pueden achicar para dejar más espacio a la imagen/torneo. El
+   estado se persiste en localStorage (main.ts), no en config.toml, porque es
+   una preferencia puramente visual de esta instalación, no del proyecto. */
+.app-nav--collapsed {
+  width: 64px;
+}
+.app-nav--collapsed .brand,
+.app-nav--collapsed .project-path,
+.app-nav--collapsed .nav-label {
+  display: none;
+}
+.app-nav--collapsed .nav-link {
+  justify-content: center;
+}
+
+.nav-spacer {
+  flex: 1;
+}
+
+.nav-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nav-collapse-btn {
+  appearance: none;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-raised);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  cursor: pointer;
+  margin-top: calc(var(--spacing-unit) * 1.5);
+}
+.nav-collapse-btn:hover {
+  color: var(--color-text);
+  border-color: var(--color-text-muted);
 }
 
 .app-nav .brand {
@@ -206,6 +250,41 @@ p {
   justify-content: space-between;
   gap: var(--spacing-unit);
 }
+.panel-row--wrap {
+  flex-wrap: wrap;
+}
+
+/* Zona de acciones destructivas — mismo panel base, borde con tinte de
+   peligro para que el ojo lo distinga antes de leer el texto (ver reporte de
+   exploración de la GUI: "los paneles más destructivos de la app se ven
+   idénticos a los inofensivos"). */
+.panel-danger-zone {
+  border-color: color-mix(in srgb, var(--color-danger) 35%, var(--color-border));
+}
+
+/* Fila de controles en línea (folder picker, etc.) — reemplaza los
+   `style="display:flex; gap:8px"` repetidos en varias vistas. */
+.input-row {
+  display: flex;
+  gap: var(--spacing-unit);
+  align-items: center;
+}
+
+.spacer-sm {
+  height: calc(var(--spacing-unit) * 1);
+}
+.spacer-md {
+  height: calc(var(--spacing-unit) * 1.5);
+}
+
+/* Contenedor de miniatura cuadrada — unifica el patrón duplicado en
+   Cluster.ts, Variables.ts, Bursts.ts y rankingBoard.css. */
+.thumb-wrap {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: var(--color-bg);
+}
 
 .stat-grid {
   display: grid;
@@ -288,7 +367,8 @@ button {
 
 input[type='text'],
 input[type='number'],
-select {
+select,
+textarea {
   appearance: none;
   background: var(--color-bg);
   border: 1px solid var(--color-border);
@@ -302,9 +382,42 @@ select {
 }
 input[type='text']:focus,
 input[type='number']:focus,
-select:focus {
+select:focus,
+textarea:focus {
   border-color: var(--color-focus-border);
   box-shadow: 0 0 0 3px var(--color-accent-soft);
+}
+
+/* Selector de color nativo (Ajustes) — el navegador ya le da un tamaño
+   razonable, solo se le quita el borde cuadrado por defecto en algunos
+   motores y se le da la misma esquina redondeada que el resto de controles. */
+input[type='color'] {
+  appearance: none;
+  width: 44px;
+  height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 2px;
+  background: var(--color-bg);
+  cursor: pointer;
+}
+input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+}
+
+/* Swatch de color de solo lectura (panel de calidad: color promedio de la
+   imagen) — antes vivía enteramente inline sin ninguna regla real. */
+.swatch {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  vertical-align: middle;
 }
 
 /* Slider (umbral de probabilidad de cluster, ver views/Cluster.ts) — no
@@ -403,6 +516,74 @@ td {
 .badge-danger {
   background: color-mix(in srgb, var(--color-danger) 20%, transparent);
   color: var(--color-danger);
+}
+
+/* Ícono de advertencia inline dentro de un badge — el SVG hereda el color
+   del badge vía currentColor (ver components/icons.ts). */
+.metric-warn {
+  padding: 3px;
+}
+.metric-warn svg {
+  display: block;
+}
+
+/* Medidor visual de métricas de calidad (estilo histograma/gauge, ver
+   components/QualityPanel.ts) — pensado para verse a simple vista dentro de
+   una tabla, sin competir con la columna de valor numérico exacto. */
+.quality-table td {
+  vertical-align: middle;
+}
+.meter-bar {
+  width: 90px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+.meter-bar-fill {
+  height: 100%;
+  background: var(--color-accent);
+  border-radius: 999px;
+  transition: width 0.2s ease;
+}
+.meter-bar-fill--warn {
+  background: var(--color-danger);
+}
+
+/* Layout principal del Torneo (antes seteado vía JS: layout.style.display =
+   'grid', etc. — ver reporte de exploración de la GUI). El panel de calidad
+   colapsa a un ancho angosto (queda el botón de expandir) en vez de
+   desaparecer del todo, estilo Darktable. */
+.tournament-layout {
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: calc(var(--spacing-unit) * 3);
+  align-items: start;
+  transition: grid-template-columns 0.15s ease;
+}
+.tournament-layout--collapsed {
+  grid-template-columns: 1fr 48px;
+}
+.tournament-layout--collapsed .tournament-quality-col h3,
+.tournament-layout--collapsed .quality-body {
+  display: none;
+}
+
+.quality-collapse-btn {
+  appearance: none;
+  border: none;
+  background: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+}
+.quality-collapse-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-raised);
 }
 
 .empty-state {

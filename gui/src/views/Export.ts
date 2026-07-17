@@ -4,6 +4,13 @@
 import { cli, CliError } from '../api';
 import { getProject } from '../state';
 import { showToast } from '../toast';
+import { showLoadingOverlay } from '../components/LoadingOverlay';
+
+const EXPORT_PHASES = [
+  'Leyendo ranking y clusters…',
+  'Calculando estrellas (percentiles del índice global)…',
+  'Escribiendo sidecars .xmp…',
+];
 
 export async function renderExport(container: HTMLElement): Promise<void> {
   const project = getProject();
@@ -129,8 +136,13 @@ export async function renderExport(container: HTMLElement): Promise<void> {
 
   container.querySelector('#refresh-ranking-btn')?.addEventListener('click', loadRanking);
   container.querySelector('#refresh-failed-btn')?.addEventListener('click', loadFailed);
-  container.querySelector('#export-btn')?.addEventListener('click', async () => {
-    exportResult.textContent = 'Exportando…';
+  container.querySelector<HTMLButtonElement>('#export-btn')?.addEventListener('click', async () => {
+    // Diálogo explícito de progreso + confirmación de "listo" (feedback de
+    // uso real: "debería haber un diálogo que muestre el trabajo que se está
+    // haciendo y que diga que todo finalizó") — no un simple toast que
+    // desaparece solo, ver LoadingHandle.finish en LoadingOverlay.ts.
+    exportResult.textContent = '';
+    const handle = showLoadingOverlay('Exportando a XMP…', EXPORT_PHASES);
     try {
       const data = await cli.exportXmp(dbPath);
       exportResult.innerHTML = `<pre class="mono" style="white-space:pre-wrap">${JSON.stringify(
@@ -138,10 +150,13 @@ export async function renderExport(container: HTMLElement): Promise<void> {
         null,
         2,
       )}</pre>`;
-      showToast(`export-xmp: ${data.written} sidecars escritos`);
+      await handle.finish(
+        `${data.written} sidecars .xmp escritos (${data.excluded_failed_thumbnail} excluidas por miniatura fallida, ${data.excluded_missing} excluidas por faltantes).`,
+      );
     } catch (e) {
       const msg = e instanceof CliError ? e.message : String(e);
       exportResult.innerHTML = `<div class="empty-state">${msg}</div>`;
+      handle.close();
       showToast(msg, true);
     }
   });

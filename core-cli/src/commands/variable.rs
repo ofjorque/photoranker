@@ -1,9 +1,12 @@
-//! `variable-create` / `variable-list` / `variable-set` — ver docs/fase1-ingesta.md
-//! y docs/database.md (`user_variables`, `variable_categories`, `image_variable_values`).
+//! `variable-create` / `variable-list` / `variable-set` / `variable-delete` —
+//! ver docs/fase1-ingesta.md y docs/database.md (`user_variables`,
+//! `variable_categories`, `image_variable_values`).
 
+use crate::db;
 use crate::error::{AppError, AppResult};
 use rusqlite::{Connection, OptionalExtension, params};
 use serde_json::json;
+use std::path::Path;
 
 pub struct NewCategory {
     pub code: i64,
@@ -165,6 +168,45 @@ pub fn set(
     Ok(json!({
         "variable": variable_name,
         "values_set": values.len(),
+    }))
+}
+
+/// `variable-delete --variable <name>`: borra por completo una variable
+/// personalizada — sus categorías (si es nominal) y **todos** los valores ya
+/// asignados a imágenes (`image_variable_values`), además de la fila en
+/// `user_variables`. Agregado por feedback de uso real ("debería poder
+/// eliminar las variables definidas si así lo requiero" — ej. para corregir
+/// una variable creada con un nombre mal tipeado). Es destructivo e
+/// irreversible (a diferencia de `tournament-undo`/`burst-undo`, no hay
+/// snapshot que restaurar), así que dispara `db::backup` igual que las demás
+/// operaciones irreversibles del CLI.
+pub fn delete(
+    conn: &mut Connection,
+    db_path: &Path,
+    variable_name: &str,
+) -> AppResult<serde_json::Value> {
+    let (variable_id, _var_type, _min, _max) = find_variable(conn, variable_name)?;
+
+    db::backup(conn, db_path)?;
+
+    let tx = conn.transaction()?;
+    let values_deleted = tx.execute(
+        "DELETE FROM image_variable_values WHERE variable_id = ?1",
+        params![variable_id],
+    )?;
+    tx.execute(
+        "DELETE FROM variable_categories WHERE variable_id = ?1",
+        params![variable_id],
+    )?;
+    tx.execute(
+        "DELETE FROM user_variables WHERE id = ?1",
+        params![variable_id],
+    )?;
+    tx.commit()?;
+
+    Ok(json!({
+        "variable": variable_name,
+        "values_deleted": values_deleted,
     }))
 }
 

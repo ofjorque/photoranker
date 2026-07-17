@@ -320,6 +320,82 @@ fn read_theme_override(path: String) -> Option<String> {
     std::fs::read_to_string(expanded).ok()
 }
 
+/// Nombre fijo del archivo de override que genera la propia pantalla de
+/// Ajustes (ver `views/Settings.ts`) — distinto de cualquier `theme_path`
+/// que el usuario haya apuntado a mano a un archivo propio, para poder
+/// avisarle antes de tomar control de esa clave (ver docs/fase5-gui.md).
+const GUI_ACCENT_FILENAME: &str = "gui-accent.css";
+
+fn photoranker_config_dir() -> Result<PathBuf, String> {
+    ProjectDirs::from("", "", "photoranker")
+        .map(|dirs| dirs.config_dir().to_path_buf())
+        .ok_or_else(|| "No se pudo determinar el directorio de configuración".to_string())
+}
+
+/// Actualiza solo la clave `theme` de `config.toml`, preservando el resto de
+/// claves que gestiona el CLI (`core-cli/src/config.rs`) — nunca reescribe
+/// el archivo entero con un `ThemeConfig` parcial, que borraría el resto de
+/// la configuración del usuario.
+#[tauri::command]
+fn write_theme_config(theme: String) -> Result<(), String> {
+    let dir = photoranker_config_dir()?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let config_path = dir.join("config.toml");
+
+    let mut parsed: toml::Value = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|text| toml::from_str(&text).ok())
+        .unwrap_or_else(|| toml::Value::Table(Default::default()));
+
+    let table = parsed
+        .as_table_mut()
+        .ok_or_else(|| "config.toml no tiene la forma esperada (tabla TOML)".to_string())?;
+    table.insert("theme".to_string(), toml::Value::String(theme));
+
+    let serialized = toml::to_string_pretty(&parsed).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, serialized).map_err(|e| e.to_string())
+}
+
+/// Escribe el CSS de acento generado por la pantalla de Ajustes a un archivo
+/// fijo (`gui-accent.css`) y actualiza `theme_path` en `config.toml` para que
+/// apunte ahí — reutiliza el mecanismo de override ya existente
+/// (`read_theme_override`) en vez de inventar un segundo camino de theming.
+#[tauri::command]
+fn write_theme_override(css: String) -> Result<(), String> {
+    let dir = photoranker_config_dir()?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let accent_path = dir.join(GUI_ACCENT_FILENAME);
+    std::fs::write(&accent_path, css).map_err(|e| e.to_string())?;
+
+    let config_path = dir.join("config.toml");
+    let mut parsed: toml::Value = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|text| toml::from_str(&text).ok())
+        .unwrap_or_else(|| toml::Value::Table(Default::default()));
+    let table = parsed
+        .as_table_mut()
+        .ok_or_else(|| "config.toml no tiene la forma esperada (tabla TOML)".to_string())?;
+    table.insert(
+        "theme_path".to_string(),
+        toml::Value::String(accent_path.to_string_lossy().to_string()),
+    );
+
+    let serialized = toml::to_string_pretty(&parsed).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, serialized).map_err(|e| e.to_string())
+}
+
+/// Para que la pantalla de Ajustes pueda advertir antes de pisar un
+/// `theme_path` que el usuario haya apuntado a mano a un archivo propio (ver
+/// docs/fase5-gui.md, nota de diseño de la pantalla de Ajustes).
+#[tauri::command]
+fn theme_path_is_gui_managed(theme_path: String) -> bool {
+    if theme_path.trim().is_empty() {
+        return true;
+    }
+    let expanded = shellexpand_home(&theme_path);
+    expanded.file_name().and_then(|n| n.to_str()) == Some(GUI_ACCENT_FILENAME)
+}
+
 fn shellexpand_home(path: &str) -> PathBuf {
     if let Some(rest) = path.strip_prefix("~/").or_else(|| path.strip_prefix("~\\"))
         && let Some(home) = directories::UserDirs::new()
@@ -354,6 +430,9 @@ pub fn run() {
             cancel_photoranker,
             read_theme_config,
             read_theme_override,
+            write_theme_config,
+            write_theme_override,
+            theme_path_is_gui_managed,
             pick_folder
         ])
         .run(tauri::generate_context!())

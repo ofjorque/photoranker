@@ -12,6 +12,8 @@ import { getProject } from '../state';
 import { showToast } from '../toast';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
 import { makeZoomable } from '../components/Lightbox';
+import { confirmDialog } from '../components/ConfirmDialog';
+import { icons } from '../components/icons';
 
 function isTypingTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false;
@@ -61,7 +63,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
       <div class="panel">
         <h2>Clasificación visual</h2>
         <p>Recorré las fotos activas una por una y asigná el valor con el teclado — misma mecánica que el torneo.</p>
-        <div style="display:flex; gap:8px; align-items:end;">
+        <div class="input-row" style="align-items:flex-end">
           <div class="field" style="flex:1">
             <label>Variable</label>
             <select id="classify-select"></select>
@@ -79,7 +81,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
         </div>
         <div class="field" style="margin-top:8px">
           <label>Valores (uno por línea, formato id:valor)</label>
-          <textarea id="var-set-values" rows="5" style="font-family:var(--font-family); background:var(--color-bg); color:var(--color-text); border:1px solid var(--color-border); border-radius:var(--radius-md); padding:8px;" placeholder="42:4&#10;17:2&#10;58:5"></textarea>
+          <textarea id="var-set-values" rows="5" placeholder="42:4&#10;17:2&#10;58:5"></textarea>
         </div>
         <button class="btn btn-primary" id="set-values-btn" style="margin-top:12px">variable-set</button>
       </div>
@@ -113,7 +115,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
     }
     listContainer.innerHTML = `
       <table>
-        <thead><tr><th>Nombre</th><th>Tipo</th><th>Rango / Categorías</th></tr></thead>
+        <thead><tr><th>Nombre</th><th>Tipo</th><th>Rango / Categorías</th><th></th></tr></thead>
         <tbody>
           ${currentVariables
             .map(
@@ -121,7 +123,9 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
                 v.var_type === 'ordinal'
                   ? `${v.min_value ?? '?'} – ${v.max_value ?? '?'}`
                   : v.categories.map((c) => `${c.label}=${c.code}`).join(', ')
-              }</td></tr>`,
+              }</td><td><button class="btn btn-danger delete-var-btn" data-variable-name="${
+                v.name
+              }" title="Eliminar variable (borra también todos los valores asignados)">${icons.trash}</button></td></tr>`,
             )
             .join('')}
         </tbody>
@@ -131,6 +135,26 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
       .join('');
     setSelect.innerHTML = options;
     classifySelect.innerHTML = options;
+
+    listContainer.querySelectorAll<HTMLButtonElement>('.delete-var-btn').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const name = btn.dataset.variableName!;
+        const confirmed = await confirmDialog({
+          title: 'Eliminar variable',
+          message: `¿Eliminar la variable "${name}"? Se borran también todos los valores ya asignados a imágenes. Esta acción no se puede deshacer.`,
+          confirmLabel: 'Eliminar',
+          danger: true,
+        });
+        if (!confirmed) return;
+        try {
+          const result = await cli.variableDelete(dbPath, name);
+          showToast(`Variable "${name}" eliminada (${result.values_deleted} valores borrados)`);
+          await refreshList();
+        } catch (e) {
+          showToast(e instanceof CliError ? e.message : String(e), true);
+        }
+      });
+    });
   }
 
   await refreshList();
@@ -235,7 +259,7 @@ function mountClassifier(
         <span id="classify-counter" class="mono"></span>
         <span id="classify-current-value" class="badge badge-muted"></span>
       </div>
-      <div class="thumb-wrap" style="aspect-ratio:4/3; background:var(--color-bg); border-radius:var(--radius-md); overflow:hidden; display:flex; align-items:center; justify-content:center; margin:10px 0;">
+      <div class="thumb-wrap" style="aspect-ratio:4/3; margin:10px 0; display:flex; align-items:center; justify-content:center;">
         <div id="classify-thumb"></div>
       </div>
       <div id="classify-filename" style="font-size:12px; color:var(--color-text-muted); word-break:break-all;"></div>

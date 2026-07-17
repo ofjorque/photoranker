@@ -63,3 +63,17 @@
   color: var(--color-text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* Estado "listo" (ver LoadingHandle.finish en LoadingOverlay.ts) — reemplaza
+   el spinner por una confirmación explícita en vez de cerrar el overlay
+   directamente, para operaciones donde el usuario quiere ver que terminó. */
+.loading-card--done {
+  min-width: 320px;
+}
+.loading-done-icon {
+  color: var(--color-success);
+}
+.loading-done-icon svg {
+  width: 40px;
+  height: 40px;
+}

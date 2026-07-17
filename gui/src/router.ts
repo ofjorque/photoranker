@@ -1,7 +1,22 @@
 // Router mínimo por hash, sin dependencias externas.
-export type Route = 'home' | 'bursts' | 'tournament' | 'cluster' | 'variables' | 'export';
+export type Route =
+  | 'home'
+  | 'bursts'
+  | 'tournament'
+  | 'cluster'
+  | 'variables'
+  | 'export'
+  | 'settings';
 
-const validRoutes: Route[] = ['home', 'bursts', 'tournament', 'cluster', 'variables', 'export'];
+const validRoutes: Route[] = [
+  'home',
+  'bursts',
+  'tournament',
+  'cluster',
+  'variables',
+  'export',
+  'settings',
+];
 
 export function currentRoute(): Route {
   const hash = window.location.hash.replace('#/', '') as Route;

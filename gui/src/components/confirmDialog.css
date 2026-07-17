@@ -1,0 +1,37 @@
+/* Modal de confirmación — ver ConfirmDialog.ts. */
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4000;
+}
+
+.confirm-panel {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: calc(var(--spacing-unit) * 3);
+  max-width: 420px;
+  width: 90%;
+}
+
+.confirm-title {
+  margin: 0 0 calc(var(--spacing-unit) * 1.5);
+  font-size: 16px;
+}
+
+.confirm-message {
+  margin: 0 0 calc(var(--spacing-unit) * 3);
+  color: var(--color-text-muted);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-unit);
+}

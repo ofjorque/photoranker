@@ -60,7 +60,9 @@
   border-radius: var(--radius-md);
   width: 36px;
   height: 36px;
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 .lightbox-controls button:hover {
@@ -80,7 +82,9 @@
   border-radius: var(--radius-md);
   width: 36px;
   height: 36px;
-  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 .lightbox-close:hover {
@@ -93,6 +97,9 @@
   top: 22px;
   left: 50%;
   transform: translateX(-50%);
+  /* El overlay siempre es oscuro (rgba(0,0,0,0.86) arriba) sin importar el
+     tema activo, así que el texto siempre necesita ser claro — nunca
+     var(--color-text), que en tema claro sería casi negro e ilegible acá. */
   color: rgba(255, 255, 255, 0.7);
   font-size: 12px;
   z-index: 3001;

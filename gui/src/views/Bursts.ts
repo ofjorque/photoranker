@@ -114,10 +114,7 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
         wrap.style.gap = '4px';
         wrap.style.cursor = 'pointer';
         const thumb = document.createElement('div');
-        thumb.style.aspectRatio = '1';
-        thumb.style.borderRadius = 'var(--radius-sm)';
-        thumb.style.overflow = 'hidden';
-        thumb.style.background = 'var(--color-bg)';
+        thumb.className = 'thumb-wrap';
         getThumbnailDataUrl(project.dbPath, img.id).then((url) => {
           if (!url) return;
           const el = document.createElement('img');

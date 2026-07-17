@@ -31,6 +31,7 @@ import type {
   TournamentUndoResult,
   UserVariable,
   VariableCreateResult,
+  VariableDeleteResult,
   VariableSetResult,
   VariableValueEntry,
 } from './types';
@@ -181,6 +182,9 @@ export const cli = {
     ]),
 
   variableList: (dbPath: string) => callCli<UserVariable[]>(['variable-list', ...dbArgs(dbPath)]),
+
+  variableDelete: (dbPath: string, variable: string) =>
+    callCli<VariableDeleteResult>(['variable-delete', '--variable', variable, ...dbArgs(dbPath)]),
 
   variableSet: (dbPath: string, variable: string, values: Array<[number, number]>) =>
     callCli<VariableSetResult>([

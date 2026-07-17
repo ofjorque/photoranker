@@ -31,6 +31,9 @@ photoranker variable-list
 # Asignar valores de una variable a imágenes (formato id:valor)
 photoranker variable-set --variable "Grado de nostalgia" --values 42:4 17:2 58:5
 
+# Eliminar una variable (borra también sus categorías y valores asignados)
+photoranker variable-delete --variable "Grado de nostalgia"
+
 # Modo TUI: asignar una variable recorriendo las imágenes por teclado (ver miniaturas)
 photoranker variable-tag --variable "Grado de nostalgia"
 

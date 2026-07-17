@@ -67,10 +67,7 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
 
     for (const img of cluster.representative_images) {
       const thumbWrap = document.createElement('div');
-      thumbWrap.style.aspectRatio = '1';
-      thumbWrap.style.borderRadius = 'var(--radius-sm)';
-      thumbWrap.style.overflow = 'hidden';
-      thumbWrap.style.background = 'var(--color-bg)';
+      thumbWrap.className = 'thumb-wrap';
       thumbRow.appendChild(thumbWrap);
       getThumbnailDataUrl(dbPath, img.id).then((url) => {
         if (!url) return;

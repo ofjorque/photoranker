@@ -6,6 +6,9 @@ import { getProject } from '../state';
 import { showToast } from '../toast';
 import { mountRankingBoard } from '../components/RankingBoard';
 import { renderQualityPanel } from '../components/QualityPanel';
+import { icons } from '../components/icons';
+
+const QUALITY_PANEL_COLLAPSED_KEY = 'photoranker-quality-panel-collapsed';
 
 export async function renderTournament(container: HTMLElement): Promise<() => void> {
   let boardDestroy: (() => void) | null = null;
@@ -71,16 +74,37 @@ export async function renderTournament(container: HTMLElement): Promise<() => vo
     heading.textContent = `Grupo ${group.group_id.slice(0, 8)}…`;
     view.appendChild(heading);
 
+    // Panel colapsable (estilo Darktable: los grupos de módulos laterales se
+    // pueden achicar para dejar más espacio a la imagen) — el estado se
+    // persiste en localStorage, es una preferencia de esta instalación, no
+    // del proyecto/carpeta.
+    const collapsed = localStorage.getItem(QUALITY_PANEL_COLLAPSED_KEY) === 'true';
+
     const layout = document.createElement('div');
-    layout.style.display = 'grid';
-    layout.style.gridTemplateColumns = '1fr 260px';
-    layout.style.gap = '24px';
-    layout.style.alignItems = 'start';
+    layout.className = 'tournament-layout' + (collapsed ? ' tournament-layout--collapsed' : '');
 
     const boardCol = document.createElement('div');
     const qualityCol = document.createElement('div');
-    qualityCol.className = 'panel';
-    qualityCol.innerHTML = '<h3>Panel de calidad</h3><p>Enfocá una imagen…</p>';
+    qualityCol.className = 'panel tournament-quality-col';
+
+    const qualityHeader = document.createElement('div');
+    qualityHeader.className = 'panel-row';
+    const qualityToggle = document.createElement('button');
+    qualityToggle.className = 'quality-collapse-btn';
+    qualityToggle.title = 'Colapsar/expandir panel de calidad';
+    qualityToggle.innerHTML = collapsed ? icons.chevronLeft : icons.chevronRight;
+    qualityToggle.addEventListener('click', () => {
+      const nowCollapsed = layout.classList.toggle('tournament-layout--collapsed');
+      localStorage.setItem(QUALITY_PANEL_COLLAPSED_KEY, String(nowCollapsed));
+      qualityToggle.innerHTML = nowCollapsed ? icons.chevronLeft : icons.chevronRight;
+    });
+    qualityHeader.appendChild(document.createElement('h3')).textContent = 'Panel de calidad';
+    qualityHeader.appendChild(qualityToggle);
+    qualityCol.appendChild(qualityHeader);
+    const qualityBodyWrap = document.createElement('div');
+    qualityBodyWrap.className = 'quality-body';
+    qualityBodyWrap.innerHTML = '<p>Enfocá una imagen…</p>';
+    qualityCol.appendChild(qualityBodyWrap);
 
     layout.appendChild(boardCol);
     layout.appendChild(qualityCol);
@@ -95,9 +119,7 @@ export async function renderTournament(container: HTMLElement): Promise<() => vo
         return found ? `μ=${found.mu.toFixed(1)} σ=${found.sigma.toFixed(1)}` : '';
       },
       onFocusChange: (img) => {
-        qualityCol.innerHTML = '<h3>Panel de calidad</h3><div class="quality-body"></div>';
-        const target = qualityCol.querySelector('.quality-body') as HTMLElement;
-        renderQualityPanel(target, project.dbPath, img.id);
+        renderQualityPanel(qualityBodyWrap, project.dbPath, img.id);
       },
       onSubmit: async (ranking) => {
         try {

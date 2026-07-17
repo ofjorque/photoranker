@@ -123,6 +123,15 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Borra por completo una variable personalizada (categorías + valores
+    /// asignados + la variable misma). Destructivo e irreversible.
+    #[command(name = "variable-delete")]
+    VariableDelete {
+        #[arg(long)]
+        variable: String,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Devuelve el valor actual de una variable para cada imagen activa.
     #[command(name = "get-variable-values")]
     GetVariableValues {
@@ -384,6 +393,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             let mut conn = db::open_local(&db_path)?;
             let pairs = parse_id_number_pairs(&values, "values")?;
             commands::variable::set(&mut conn, &variable, &pairs)
+        }
+        Commands::VariableDelete { variable, db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::variable::delete(&mut conn, &db_path, &variable)
         }
         Commands::GetVariableValues { variable, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;

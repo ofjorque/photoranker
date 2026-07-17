@@ -138,6 +138,11 @@ export interface VariableCreateResult {
   position: number;
 }
 
+export interface VariableDeleteResult {
+  variable: string;
+  values_deleted: number;
+}
+
 export interface UserVariable {
   id: number;
   name: string;
