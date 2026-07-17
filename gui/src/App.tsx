@@ -77,6 +77,19 @@ export function App() {
     };
   }, []);
 
+  // Apaga el menú contextual nativo del webview (Recargar/Inspeccionar,
+  // etc.) en toda la app — no aporta nada en una app de escritorio
+  // terminada. Los `ContextMenu` propios de shadcn (Torneo, Ráfagas,
+  // Clusters, Exportar) siguen funcionando igual: ya llaman
+  // `preventDefault()` sobre este mismo evento en su propio trigger antes
+  // de que este listener global corra, así que no hay conflicto — esto solo
+  // tapa los lugares del resto de la app que no tienen un menú propio.
+  useEffect(() => {
+    const handler = (e: MouseEvent) => e.preventDefault();
+    document.addEventListener('contextmenu', handler);
+    return () => document.removeEventListener('contextmenu', handler);
+  }, []);
+
   const handleNavOpenChange = (open: boolean) => {
     setNavOpen(open);
     localStorage.setItem(NAV_COLLAPSED_KEY, String(!open));

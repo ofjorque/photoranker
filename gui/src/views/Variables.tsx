@@ -12,12 +12,17 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/com
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Trash2, Info } from 'lucide-react';
 import { Html } from '@/components/Html';
 import { openLightbox } from '@/components/Lightbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { VariableBuilder, type VariableBuilderInput } from '@/components/VariableBuilder';
 import { PhotoDetailsDrawer } from '@/components/PhotoDetailsDrawer';
+import { cn } from '@/lib/utils';
+
+const CLASSIFY_GRID_MODE_KEY = 'photoranker-classify-grid-mode';
+const CLASSIFY_GRID_PAGE_SIZE = 12;
 
 interface VariableCardImage {
   id: number;
@@ -37,6 +42,13 @@ export function VariablesView() {
   const [classifyEntries, setClassifyEntries] = useState<VariableValueEntry[]>([]);
   const [classifyIndex, setClassifyIndex] = useState(-1);
   const [classifyThumb, setClassifyThumb] = useState<string>('');
+  // Vista en grilla del clasificador — ver docs/fase8-mejoras-avanzadas.md,
+  // "Vista en grilla (múltiples imágenes a la vez) al clasificar variables".
+  const [classifyGridMode, setClassifyGridMode] = useState(
+    () => localStorage.getItem(CLASSIFY_GRID_MODE_KEY) === 'true',
+  );
+  const [classifyGridThumbs, setClassifyGridThumbs] = useState<Record<number, string>>({});
+  const [classifyGridPage, setClassifyGridPage] = useState(0);
 
   // Vista de tarjetas (fotos × todas sus variables) — ver
   // docs/fase7-mejoras-post-mvp.md.
@@ -161,6 +173,7 @@ export function VariablesView() {
       }
       setClassifyEntries(entries);
       setClassifyIndex(0);
+      setClassifyGridPage(0);
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -169,9 +182,11 @@ export function VariablesView() {
   const closeClassify = () => {
     setClassifyIndex(-1);
     setClassifyEntries([]);
+    setClassifyGridPage(0);
   };
 
   useEffect(() => {
+    if (classifyGridMode) return;
     if (classifyIndex >= 0 && classifyIndex < classifyEntries.length) {
       const entry = classifyEntries[classifyIndex];
       setClassifyThumb(''); // clear
@@ -179,7 +194,33 @@ export function VariablesView() {
         if (url) setClassifyThumb(url);
       });
     }
-  }, [classifyIndex, classifyEntries, project]);
+  }, [classifyIndex, classifyEntries, project, classifyGridMode]);
+
+  // Trae miniaturas solo de la página actual (no las ~cientos de
+  // `classifyEntries` enteras) — más rápido y consistente con paginar la
+  // grilla (ver docs/fase8-mejoras-avanzadas.md).
+  useEffect(() => {
+    if (!classifyGridMode || classifyIndex < 0 || !project) return;
+    const start = classifyGridPage * CLASSIFY_GRID_PAGE_SIZE;
+    const pageEntries = classifyEntries.slice(start, start + CLASSIFY_GRID_PAGE_SIZE);
+    for (const entry of pageEntries) {
+      if (classifyGridThumbs[entry.id]) continue;
+      getThumbnailDataUrl(project.dbPath, entry.id).then(url => {
+        if (url) setClassifyGridThumbs(prev => ({ ...prev, [entry.id]: url }));
+      });
+    }
+    // classifyGridThumbs deliberadamente fuera de deps (mismo motivo que en
+    // Cluster.tsx/loadCards): evita el loop de refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [classifyGridMode, classifyIndex, classifyEntries, classifyGridPage, project]);
+
+  // Si el foco (controlado por teclado, mismo efecto que el modo uno-a-uno)
+  // se mueve fuera de la página visible, seguirlo a la página que corresponda.
+  useEffect(() => {
+    if (!classifyGridMode || classifyIndex < 0) return;
+    const page = Math.floor(classifyIndex / CLASSIFY_GRID_PAGE_SIZE);
+    setClassifyGridPage(prev => (prev === page ? prev : page));
+  }, [classifyGridMode, classifyIndex]);
 
   // Classifier keyboard nav
   useEffect(() => {
@@ -250,6 +291,26 @@ export function VariablesView() {
 
   const activeVar = variables.find(v => v.name === classifyVar);
 
+  // Asignación por click en la vista en grilla — el teclado (flechas +
+  // números) sigue funcionando igual que en modo uno-a-uno vía el efecto de
+  // arriba, que no distingue el modo visual, solo mueve `classifyIndex` y
+  // asigna sobre `classifyEntries[classifyIndex]`.
+  async function assignGridValue(index: number, code: number) {
+    if (!project || !activeVar) return;
+    const entry = classifyEntries[index];
+    try {
+      await cli.variableSet(project.dbPath, activeVar.name, [[entry.id, code]]);
+      setClassifyEntries(prev => {
+        const next = [...prev];
+        next[index] = { ...next[index], value: code };
+        return next;
+      });
+      setClassifyIndex(index);
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    }
+  }
+
   function getOptionLabel(v: UserVariable, code: number) {
     if (v.var_type === 'nominal') {
       const cat = v.categories.find(c => c.code === code);
@@ -267,11 +328,115 @@ export function VariablesView() {
     return codes;
   }
 
+  if (classifyIndex >= 0 && activeVar && classifyGridMode) {
+    const codes = getValidCodes(activeVar);
+    const pageCount = Math.max(1, Math.ceil(classifyEntries.length / CLASSIFY_GRID_PAGE_SIZE));
+    const pageStart = classifyGridPage * CLASSIFY_GRID_PAGE_SIZE;
+    const pageEntries = classifyEntries
+      .slice(pageStart, pageStart + CLASSIFY_GRID_PAGE_SIZE)
+      .map((entry, i) => ({ entry, globalIndex: pageStart + i }));
+
+    return (
+      <div className="flex flex-col h-full bg-background">
+        <div className="p-4 border-b flex items-center justify-between shrink-0">
+          <div className="text-sm">
+            <span className="font-medium">{activeVar.name}</span>{' '}
+            <span className="text-muted-foreground">
+              ({classifyEntries.filter(e => e.value != null).length}/{classifyEntries.length})
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={classifyGridPage === 0}
+                onClick={() => setClassifyGridPage(p => Math.max(0, p - 1))}
+              >
+                {t('variables.classifier.prevPage')}
+              </Button>
+              <span className="text-xs text-muted-foreground font-mono px-2">
+                {t('variables.classifier.page', { page: classifyGridPage + 1, total: pageCount })}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={classifyGridPage >= pageCount - 1}
+                onClick={() => setClassifyGridPage(p => Math.min(pageCount - 1, p + 1))}
+              >
+                {t('variables.classifier.nextPage')}
+              </Button>
+            </div>
+            <Button variant="ghost" size="sm" onClick={closeClassify}>
+              {t('variables.classifier.exit')}
+            </Button>
+          </div>
+        </div>
+
+        <div
+          className="flex-1 overflow-auto p-6 grid gap-6 items-start content-start"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}
+        >
+          {pageEntries.map(({ entry, globalIndex }) => {
+            const name = entry.file_path.split(/[\\/]/).pop() ?? entry.file_path;
+            const isFocused = globalIndex === classifyIndex;
+            return (
+              <div
+                key={entry.id}
+                onClick={() => setClassifyIndex(globalIndex)}
+                className={cn(
+                  'rounded-lg border-2 overflow-hidden cursor-pointer transition-colors bg-card shadow-sm',
+                  isFocused ? 'border-primary focus-halo' : 'border-border hover:border-border/80',
+                )}
+              >
+                <div className="relative aspect-[4/3] bg-muted flex items-center justify-center">
+                  {classifyGridThumbs[entry.id] ? (
+                    <img src={classifyGridThumbs[entry.id]} className="w-full h-full object-cover" alt={name} />
+                  ) : (
+                    <Skeleton className="w-full h-full rounded-none" />
+                  )}
+                  {entry.value != null && (
+                    <div className="absolute top-2 right-2 text-xs leading-none px-2 py-1 rounded-full bg-success text-success-foreground font-medium shadow">
+                      {getOptionLabel(activeVar, entry.value)}
+                    </div>
+                  )}
+                </div>
+                <div className="p-2.5 text-xs truncate" title={entry.file_path}>
+                  {name}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div className="p-4 border-t bg-muted/30 flex flex-wrap items-center gap-2 shrink-0">
+          <span className="text-xs text-muted-foreground mr-2 font-mono">
+            {classifyIndex + 1}/{classifyEntries.length}
+          </span>
+          {codes.map(code => (
+            <Button
+              key={code}
+              size="sm"
+              variant={classifyEntries[classifyIndex]?.value === code ? 'default' : 'secondary'}
+              onClick={() => assignGridValue(classifyIndex, code)}
+            >
+              {getOptionLabel(activeVar, code)}
+            </Button>
+          ))}
+          <Html
+            className="text-xs text-muted-foreground ml-auto [&_kbd]:px-1.5 [&_kbd]:py-0.5 [&_kbd]:rounded [&_kbd]:border [&_kbd]:bg-muted [&_kbd]:font-mono"
+            html={t('variables.classifier.hint')}
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (classifyIndex >= 0 && activeVar) {
     const entry = classifyEntries[classifyIndex];
     const codes = getValidCodes(activeVar);
     const name = entry.file_path.split(/[\\/]/).pop() ?? entry.file_path;
-    
+
     return (
       <div className="flex flex-col items-center justify-center h-full p-6 bg-background">
         <Card className="w-full max-w-md">
@@ -418,6 +583,19 @@ export function VariablesView() {
                   {variables.map(v => <SelectItem key={v.name} value={v.name}>{v.name}</SelectItem>)}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="flex items-center gap-2 pb-2">
+              <Switch
+                id="classify-grid-mode-switch"
+                checked={classifyGridMode}
+                onCheckedChange={(checked) => {
+                  setClassifyGridMode(checked);
+                  localStorage.setItem(CLASSIFY_GRID_MODE_KEY, String(checked));
+                }}
+              />
+              <Label htmlFor="classify-grid-mode-switch" className="cursor-pointer">
+                {t('variables.classify.gridMode')}
+              </Label>
             </div>
             <Button onClick={startClassify} disabled={!classifyVar}>
               {t('variables.classify.start')}

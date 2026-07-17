@@ -1,0 +1,65 @@
+name: Release
+
+# Se dispara al pushear un tag "v*" (ej. v0.1.0) — ver "Cómo hacer un
+# release" en README.md. Windows únicamente: soporte Mac/Linux está
+# explícitamente fuera de alcance del MVP (ver docs/fase6-fuera-de-alcance.md).
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cachear dependencias de Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            core-cli
+            gui/src-tauri
+
+      - name: Instalar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Instalar dependencias de la GUI
+        working-directory: gui
+        run: npm ci
+
+      # Deliberadamente sin `cargo test` acá: fase2_integration invoca
+      # Rscript/clustMD como subproceso real (ver docs/fase2-clustering.md),
+      # y el runner de GitHub no trae R instalado — agregarlo infla mucho el
+      # release (instalar R + compilar clustMD desde fuente en Windows puede
+      # tardar bastante). Correr `cargo test` localmente antes de taggear
+      # (ver "Cómo hacer un release" en README.md).
+
+      - name: Compilar core-cli (release)
+        working-directory: core-cli
+        run: cargo build --release
+
+      - name: Copiar photoranker.exe para que Tauri lo empaquete
+        shell: pwsh
+        run: Copy-Item core-cli/target/release/photoranker.exe gui/src-tauri/photoranker.exe
+
+      - name: Compilar la GUI y crear el Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: gui
+          tagName: ${{ github.ref_name }}
+          releaseName: "PhotoRanker ${{ github.ref_name }}"
+          releaseBody: "Ver CHANGELOG o el historial de commits para el detalle de esta versión."
+          releaseDraft: true
+          prerelease: false
