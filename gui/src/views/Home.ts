@@ -63,8 +63,11 @@ export async function renderHome(container: HTMLElement): Promise<void> {
 
       <div class="panel panel-danger-zone">
         <h2>Índice global</h2>
-        <p>Vacía por completo <code>global_index.sqlite</code> — afecta el cálculo de estrellas de <strong>todas</strong> tus carpetas, no solo esta. Úsalo solo si sabés lo que hace.</p>
-        <button class="btn btn-danger" id="reset-global-btn">reset-global-index</button>
+        <p>Operaciones sobre <code>global_index.sqlite</code> — afectan a <strong>todas</strong> tus carpetas. Úsalas solo si sabés lo que hacen.</p>
+        <div class="panel-row panel-row--wrap">
+          <button class="btn" id="resync-global-btn" title="Repara las rutas en el índice si moviste esta carpeta">resync-global</button>
+          <button class="btn btn-danger" id="reset-global-btn" title="Vacía el índice global completo">reset-global-index</button>
+        </div>
       </div>
       `
           : ''
@@ -196,6 +199,18 @@ export async function renderHome(container: HTMLElement): Promise<void> {
       const data = await withButtonBusy(btn, 'Vaciando…', () => cli.resetGlobalIndex());
       showResult('reset-global-index', data);
       showToast(`reset-global-index: ${data.rows_deleted} filas eliminadas`);
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    }
+  });
+
+  container.querySelector<HTMLButtonElement>('#resync-global-btn')?.addEventListener('click', async (e) => {
+    if (!project) return;
+    const btn = e.currentTarget as HTMLButtonElement;
+    try {
+      const data = await withButtonBusy(btn, 'Sincronizando…', () => cli.resyncGlobal(project.folderPath));
+      showResult('resync-global', data);
+      showToast(`resync-global: ${data.rows_updated} filas actualizadas`);
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
