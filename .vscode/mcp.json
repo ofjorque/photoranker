@@ -1,0 +1,21 @@
+{
+	"servers": {
+		"shadcn": {
+			"command": "npx",
+			"args": [
+				"shadcn@latest",
+				"mcp"
+			],
+			"type": "stdio"
+		},
+		"shadcn_02": {
+			"type": "stdio",
+			"command": "npx",
+			"args": [
+				"shadcn@latest",
+				"mcp"
+			]
+		}
+	},
+	"inputs": []
+}

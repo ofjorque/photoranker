@@ -74,7 +74,7 @@ export const en: Record<string, string> = {
   'screePlot.xAxis': 'k (number of clusters)',
   'screePlot.yAxis': 'BIC (higher = better fit)',
   'screePlot.caption':
-    'Best fit: <strong style="color:var(--color-success)">k = {bestK}</strong> (automatic fallback from <code>cluster</code> without <code>--k</code>).',
+    'Best fit: <strong style="color:hsl(var(--success))">k = {bestK}</strong> (automatic fallback from <code>cluster</code> without <code>--k</code>).',
 
   // components/Lightbox
   'lightbox.hint': 'Mouse wheel or +/- to zoom · drag to pan · Esc to close',
@@ -196,8 +196,8 @@ export const en: Record<string, string> = {
   'home.folder.pick': 'Choose…',
   'home.init.button': 'Initialize / Update (init)',
   'home.actions.heading': 'Actions on <span class="mono">{folderPath}</span>',
-  'home.actions.gotoBursts': 'Go to bursts &rarr;',
-  'home.actions.gotoTournament': 'Go to tournament &rarr;',
+  'home.actions.gotoBursts': 'Go to bursts →',
+  'home.actions.gotoTournament': 'Go to tournament →',
   'home.dangerZone.title': 'Undo / reset tournament',
   'home.dangerZone.description':
     "In case you made a mistake submitting a group, or want to restart this folder's tournament from scratch.",
@@ -275,9 +275,37 @@ export const en: Record<string, string> = {
   'variables.classify.needVariable': 'Choose a variable',
   'variables.classify.noActiveImages': 'No active images to classify.',
   'variables.classifier.hint':
-    '<kbd>&larr;</kbd> previous · <kbd>&rarr;</kbd>/<kbd>Space</kbd> next (unassigned) · numbers assign and advance · <kbd>Backspace</kbd> goes back',
+    '<kbd>&larr;</kbd> previous · <kbd>&rarr;</kbd>/<kbd>Space</kbd> next (unassigned) · numbers assign and advance · <kbd>Backspace</kbd> goes back · <kbd>Esc</kbd> close',
   'variables.classifier.unassigned': 'unassigned',
   'variables.classifier.valueLabel': 'value: {label}',
   'variables.classifier.assigned': '{file}: {label}',
   'variables.classifier.lastImage': "You've reached the last image",
+
+  // Tabs (added when adopting more shadcn/ui components)
+  'settings.tabs.appearance': 'Appearance',
+  'settings.tabs.language': 'Language',
+  'export.tabs.ranking': 'Ranking',
+  'export.tabs.failed': 'Failed thumbnails',
+  'export.tabs.xmp': 'Export XMP',
+  'cluster.tabs.preview': 'Preview',
+  'cluster.tabs.commit': 'Commit',
+  'cluster.tabs.list': 'Clusters',
+  'variables.tabs.build': 'Build variables',
+  'variables.tabs.classify': 'Classify',
+
+  // Photo details Drawer (Export/Bursts/Cluster)
+  'photoDetails.title': 'Photo details',
+  'photoDetails.viewDetails': 'View details',
+  'photoDetails.close': 'Close',
+
+  // Drag-and-drop variable builder
+  'variableBuilder.intro': 'Drag a variable type to the zone below to get started.',
+  'variableBuilder.block.ordinal.title': 'Ordinal',
+  'variableBuilder.block.ordinal.description': 'Numeric scale (e.g. 1 to 5)',
+  'variableBuilder.block.nominal.title': 'Nominal',
+  'variableBuilder.block.nominal.description': 'Named categories',
+  'variableBuilder.dropzone.empty': 'Drop a variable type here',
+  'variableBuilder.dropzone.configuring': 'Configuring {type} variable',
+  'variableBuilder.changeType': 'Change type',
+  'variableBuilder.submit': 'variable-create',
 };

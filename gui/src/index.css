@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Tokens de PhotoRanker — ver docs/fase5-gui.md ("Theming") y THEME.md.
+   Dos capas conviven a propósito:
+   1) El set semántico de shadcn/ui (--background, --primary, etc., HSL sin
+      wrapper — así el propio tailwind.config.js los consume como
+      `hsl(var(--x))`) — pero con los valores REALES de marca de PhotoRanker
+      (violeta #7c6fff/#6952e0), no el azul genérico del template de shadcn.
+   2) Los tokens propios del proyecto que no tienen equivalente en el set de
+      shadcn (badge de empate/posición, halo de foco, gradientes "glossy",
+      vidrio esmerilado) — mismos nombres y valores que ya existían en
+      dark.css/light.css antes de esta migración a React, para no perder el
+      trabajo de diseño ya hecho (ver WS4 en THEME.md).
+   `theme_path` (ver config.md) sigue funcionando igual que antes: un
+   `\3c style>` inyectado después de este bloque puede redefinir cualquiera de
+   estas variables — ambas capas son variables CSS planas, no dependen de
+   Tailwind en tiempo de build. */
+@layer base {
+  :root {
+    /* --- shadcn semántico (branded) --- */
+    --background: 240 16% 96%;
+    --foreground: 240 15% 11%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 15% 11%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 15% 11%;
+    --primary: 250 70% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 16% 94%;
+    --secondary-foreground: 240 15% 11%;
+    --muted: 240 16% 94%;
+    --muted-foreground: 240 7% 41%;
+    --accent: 240 16% 94%;
+    --accent-foreground: 240 15% 11%;
+    --destructive: 353 56% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 11% 88%;
+    --input: 240 11% 88%;
+    --ring: 218 74% 53%;
+    --radius: 0.625rem;
+
+    /* --- tokens propios de PhotoRanker (tema claro, deliberadamente plano
+       por contraste con el oscuro "glossy" — ver THEME.md) --- */
+    --success: 154 67% 37%;
+    --success-foreground: 150 83% 98%;
+    --tie-badge: 35 90% 38%;
+    --tie-badge-foreground: 34 100% 96%;
+    --tie-badge-rgb: 185, 112, 10;
+    --shadow-glow-accent: 0 0 24px 6px rgba(105, 82, 224, 0.22);
+    --gradient-surface: linear-gradient(155deg, #ffffff 0%, #f7f7fa 100%);
+    --gradient-surface-raised: linear-gradient(160deg, #ffffff 0%, #f4f4f8 100%);
+    --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(105, 82, 224, 0.05), transparent 60%);
+    --glass-bg: rgba(255, 255, 255, 0.75);
+    --glass-blur: 10px;
+    /* Sidebar: alineado a la paleta de marca (no los grises genéricos que
+       agrega el CLI de shadcn por defecto) — mismo --primary violeta,
+       --muted/--border ya branded. */
+    --sidebar-background: 240 16% 97%;
+    --sidebar-foreground: 240 15% 11%;
+    --sidebar-primary: 250 70% 60%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 16% 94%;
+    --sidebar-accent-foreground: 240 15% 11%;
+    --sidebar-border: 240 11% 88%;
+    --sidebar-ring: 218 74% 53%;
+  }
+
+  .dark {
+    /* --- shadcn semántico (branded) --- */
+    --background: 240 14% 7%;
+    --foreground: 240 10% 92%;
+    --card: 240 16% 12%;
+    --card-foreground: 240 10% 92%;
+    --popover: 240 16% 15%;
+    --popover-foreground: 240 10% 92%;
+    --primary: 245 100% 72%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 16% 15%;
+    --secondary-foreground: 240 10% 92%;
+    --muted: 240 16% 15%;
+    --muted-foreground: 240 6% 63%;
+    --accent: 240 16% 15%;
+    --accent-foreground: 240 10% 92%;
+    --destructive: 353 73% 63%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 240 14% 20%;
+    --input: 240 14% 20%;
+    --ring: 217 100% 65%;
+
+    /* --- tokens propios de PhotoRanker (tema oscuro "glossy") --- */
+    --success: 153 60% 53%;
+    --success-foreground: 150 67% 5%;
+    --tie-badge: 35 86% 56%;
+    --tie-badge-foreground: 32 100% 7%;
+    --tie-badge-rgb: 240, 160, 48;
+    --shadow-glow-accent: 0 0 32px 8px rgba(124, 111, 255, 0.35);
+    --gradient-surface: linear-gradient(155deg, #21212e 0%, #1a1a24 55%, #17171e 100%);
+    --gradient-surface-raised: linear-gradient(155deg, #292939 0%, #21212e 55%, #1c1c27 100%);
+    --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(124, 111, 255, 0.16), transparent 60%);
+    --glass-bg: rgba(26, 26, 36, 0.72);
+    --glass-blur: 16px;
+    /* Sidebar: alineado a la paleta de marca — mismo --primary violeta,
+       --muted/--border ya branded (ver nota en el bloque :root). */
+    --sidebar-background: 240 16% 10%;
+    --sidebar-foreground: 240 10% 92%;
+    --sidebar-primary: 245 100% 72%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 16% 15%;
+    --sidebar-accent-foreground: 240 10% 92%;
+    --sidebar-border: 240 14% 20%;
+    --sidebar-ring: 217 100% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-variant-numeric: tabular-nums;
+    background-image: var(--gradient-ambient);
+    background-attachment: fixed;
+  }
+}
+
+/* Utilidades propias — ver docs/fase5-gui.md, "Dirección 'glossy' del tema
+   oscuro". No forman parte del set de shadcn, así que van como clases
+   utilitarias en vez de colores de tailwind.config.js (no son un color
+   plano: son gradientes/sombras compuestas). */
+@layer utilities {
+  .bg-panel-gradient {
+    background-image: var(--gradient-surface);
+  }
+  .bg-panel-gradient-raised {
+    background-image: var(--gradient-surface-raised);
+  }
+  .glass {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+  .shadow-glow-accent {
+    box-shadow: var(--shadow-glow-accent);
+  }
+  .focus-halo {
+    box-shadow:
+      0 0 0 3px hsl(var(--ring)),
+      0 0 0 6px hsl(var(--ring) / 0.18),
+      0 0 28px 6px hsl(var(--ring) / 0.5);
+  }
+}
+
+@keyframes tie-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(var(--tie-badge-rgb), 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(var(--tie-badge-rgb), 0);
+  }
+}
+.animate-tie-pulse {
+  animation: tie-pulse 1.6s ease-in-out infinite;
+}

@@ -27,6 +27,8 @@ export function navigate(route: Route): void {
   window.location.hash = `#/${route}`;
 }
 
-export function onRouteChange(fn: (route: Route) => void): void {
-  window.addEventListener('hashchange', () => fn(currentRoute()));
+export function onRouteChange(fn: (route: Route) => void): () => void {
+  const handler = () => fn(currentRoute());
+  window.addEventListener('hashchange', handler);
+  return () => window.removeEventListener('hashchange', handler);
 }

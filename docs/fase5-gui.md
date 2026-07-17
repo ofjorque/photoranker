@@ -4,6 +4,12 @@
 
 La GUI es la envoltura visual de todo lo implementado en las fases 0-4 — no agrega lógica nueva (ver "Definición de MVP" en `conventions.md`). Invoca `photoranker.exe` como subproceso según el contrato de "API interna" de `conventions.md`.
 
+### Stack de frontend: React + Tailwind + shadcn/ui (migrado desde vanilla TS, por pedido explícito de uso real)
+
+La primera versión de esta fase se implementó en TypeScript vanilla sin framework (DOM manipulado a mano). Se migró después a **React 19 + Tailwind CSS + componentes de [shadcn/ui](https://ui.shadcn.com)** (estilo "new-york") — decisión explícita del usuario, no una elección técnica tomada por su cuenta. La capa que invoca al CLI (`gui/src/api/`, sin lógica de negocio) y el contrato de "API interna" no cambiaron: la migración es exclusivamente de la capa de presentación. Ver `gui/README.md` para la estructura de archivos resultante.
+
+**Ventana sin decoración nativa**: `gui/src-tauri/tauri.conf.json` define `"decorations": false` — la GUI dibuja su propia barra de título (`gui/src/components/TitleBar.tsx`: arrastre vía `data-tauri-drag-region`, minimizar/maximizar/cerrar vía `@tauri-apps/api/window`'s `getCurrentWindow()`), también por pedido explícito. No requiere cambios en el backend Rust — son comandos ya expuestos por el propio runtime de Tauri, no comandos custom de `gui/src-tauri/src/lib.rs`.
+
 ## Identidad visual: no es la interfaz por defecto de Tauri/webview
 
 La GUI debe sentirse diseñada, no un formulario HTML sin estilizar. Esto no es negociable como "detalle estético" — es parte del alcance de la Fase 5, con los mismos criterios de precisión que el resto del spec:
@@ -13,32 +19,15 @@ La GUI debe sentirse diseñada, no un formulario HTML sin estilizar. Esto no es 
 
 ## Theming: design tokens vía CSS custom properties
 
-**Decisión de diseño**: toda la interfaz se estiliza con **variables CSS (`:root { --color-accent: ...; }`)**, nunca valores de color/tipografía hardcodeados directamente en los componentes. Cada componente lee `var(--color-accent)`, `var(--spacing-unit)`, etc. — nunca un literal. Esto es lo que permite personalización externa sin tocar el código de componentes, siguiendo el mismo patrón que temas de VS Code u otras apps personalizables.
+**Decisión de diseño**: toda la interfaz se estiliza con **variables CSS**, nunca valores de color/tipografía hardcodeados directamente en los componentes — ni como literal ni como clase de Tailwind con un color fijo (ej. nunca `bg-amber-500`, siempre `bg-tie-badge` resuelto vía `hsl(var(--tie-badge))`). Esto es lo que permite personalización externa sin tocar el código de componentes, siguiendo el mismo patrón que temas de VS Code u otras apps personalizables.
 
-**Tokens mínimos que debe exponer el tema embebido por defecto** (nombres exactos, para que un override de usuario sepa qué variables puede tocar):
+Desde la migración a Tailwind + shadcn/ui, los tokens viven en `gui/src/index.css` (bloques `:root`/`.dark`) y se consumen de dos formas:
+- **Set semántico de shadcn** (`--background`, `--foreground`, `--primary`, `--card`, `--border`, `--destructive`, `--ring`, `--radius`, etc.) — formato `H S% L%` sin el wrapper `hsl()` (así `tailwind.config.js` los compone como `hsl(var(--primary))`), con los valores de **marca de PhotoRanker** (acento violeta), no el azul genérico de la plantilla por defecto de shadcn.
+- **Tokens propios del proyecto**, sin equivalente en shadcn: `--success`/`--success-foreground`, `--tie-badge`/`--tie-badge-foreground`/`--tie-badge-rgb` (badges de posición/empate, ver `fase3-torneo.md`), y los del sistema "glossy" (`--shadow-glow-accent`, `--gradient-surface`, `--gradient-surface-raised`, `--gradient-ambient`, `--glass-bg`, `--glass-blur`, ver más abajo) — extendidos en `tailwind.config.js` (`success`/`tie-badge` como colores) o como clases utilitarias propias (`.bg-panel-gradient`, `.glass`, `.focus-halo`, ver `@layer utilities` en `index.css`).
 
-```css
-:root {
-  --color-bg: #0f0f14;
-  --color-surface: #1a1a24;
-  --color-accent: #7c6fff;
-  --color-text: #e8e8ec;
-  --color-text-muted: #9a9aa5;
-  --color-tie-badge: #f0a030;      /* badge de empate, ver fase3-torneo.md */
-  --color-focus-border: #4a90ff;   /* borde de foco, ver fase3-torneo.md */
-  --color-success-text: #04140c;   /* texto sobre --color-success (badge de posición) */
-  --color-tie-badge-text: #221200; /* texto sobre --color-tie-badge */
-  --font-family: 'Inter', sans-serif;
-  --radius-md: 8px;
-  --spacing-unit: 8px;
-}
-```
-
-`--color-success-text`/`--color-tie-badge-text` existen porque el contraste correcto para el texto de un badge depende del brillo del fondo (`--color-success`/`--color-tie-badge`), que cambia entre tema oscuro y claro — no se puede derivar en CSS puro, así que son tokens independientes por tema en vez de un valor fijo hardcodeado en el componente.
-
-**Mecanismo de override por el usuario**:
+**Mecanismo de override por el usuario** (sin cambios de comportamiento con la migración — sigue siendo CSS plano, agnóstico del framework):
 - `config.toml` define `theme_path` (ver `config.md`) — ruta opcional a un archivo `.css` externo (ej. `~/.photoranker/theme.css`).
-- Al arrancar, la GUI inyecta el CSS embebido por defecto (`theme = "dark"`/`"light"` de `config.toml`) y, si `theme_path` apunta a un archivo existente, inyecta ese archivo **después**, como un `<style>` adicional — así el override solo necesita redefinir las variables que le interesan (ej. solo `--color-accent`), y el resto hereda del tema base sin que el usuario tenga que declarar cada token.
+- Al arrancar, la GUI aplica el tema embebido (`theme = "dark"`/`"light"` de `config.toml`, vía la clase `.dark` en `<html>`) y, si `theme_path` apunta a un archivo existente, inyecta ese archivo **después**, como un `<style>` adicional — así el override solo necesita redefinir las variables que le interesan (ej. solo `--primary`), y el resto hereda del tema base sin que el usuario tenga que declarar cada token. La pantalla de Ajustes, al elegir un acento con el color picker, escribe ese override generando `--primary` a partir del hex elegido (conversión a HSL, ver `hexToHslTriplet` en `gui/src/theme/index.ts`).
 - Si `theme_path` no existe o el archivo no se puede leer, se ignora silenciosamente y se usa solo el tema embebido (no es un error bloqueante — un CSS de usuario mal formado no debe romper la app).
 - No se valida el contenido del CSS del usuario más allá de que el archivo exista y sea legible; si el usuario define una variable con un valor inválido, es su responsabilidad — no se sobre-ingenieriza un validador de CSS para el MVP.
 
@@ -47,30 +36,31 @@ La GUI debe sentirse diseñada, no un formulario HTML sin estilizar. Esto no es 
 El tema oscuro por defecto se refuerza con una estética "glossy"/vidrio, pedida explícitamente por el usuario — el tema claro se mantiene deliberadamente simple/plano por contraste, ver `THEME.md`. Extiende (no reemplaza) los tokens de arriba:
 
 ```css
-:root {
+.dark {
   /* Stack de sombras con highlight superior sutil — mismos nombres que ya
-     leía todo componente, solo cambian los valores en dark.css. */
+     leía todo componente, solo cambian los valores en el bloque .dark de
+     gui/src/index.css. */
   --shadow-sm: /* ... con inset 0 1px 0 rgba(255,255,255,0.04) además de la sombra de caída */;
   --shadow-md: /* ídem, capas más profundas */;
   --shadow-lg: /* ídem */;
-  --focus-halo: /* halo de foco existente + una capa extra de glow difuso */;
-  --shadow-glow-accent: 0 0 32px 8px rgba(124, 111, 255, 0.35); /* glow ancho opcional, se suma a --focus-halo en el foco del torneo */
-  --color-tie-badge-rgb: 240, 160, 48; /* triplete RGB de --color-tie-badge, para el glow del pulso de empate */
-  --gradient-surface: linear-gradient(155deg, ...);         /* reemplaza el fill plano de .panel */
-  --gradient-surface-raised: linear-gradient(155deg, ...);  /* reemplaza el fill plano de .panel-nested */
+  --focus-halo: /* halo de foco existente + una capa extra de glow difuso, aplicado vía la clase utilitaria .focus-halo */;
+  --shadow-glow-accent: 0 0 32px 8px rgba(124, 111, 255, 0.35); /* glow ancho opcional, se suma al borde de foco del torneo */
+  --tie-badge-rgb: 240, 160, 48; /* triplete RGB de --tie-badge, para el glow del pulso de empate (@keyframes tie-pulse) */
+  --gradient-surface: linear-gradient(155deg, ...);         /* clase utilitaria .bg-panel-gradient — reemplaza el fill plano de las cards */
+  --gradient-surface-raised: linear-gradient(155deg, ...);  /* clase utilitaria .bg-panel-gradient-raised — paneles anidados */
   --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(124, 111, 255, 0.16), transparent 60%); /* glow tenue detrás de todo el shell (body) */
-  --glass-bg: rgba(26, 26, 36, 0.72);   /* fondo translúcido para overlays que flotan sobre fotos */
-  --glass-blur: 16px;                    /* backdrop-filter de esos mismos overlays */
+  --glass-bg: rgba(26, 26, 36, 0.72);   /* clase utilitaria .glass — fondo translúcido para overlays que flotan sobre fotos */
+  --glass-blur: 16px;                    /* backdrop-filter de esos mismos overlays, vía .glass */
 }
 ```
 
-- `--gradient-surface`/`--gradient-surface-raised` sustituyen el fill plano de `--color-surface`/`--color-surface-raised` en `.panel`/`.panel-nested` (`base.css`) — los paneles normales, que están sobre el fondo plano de la app y no sobre fotos, usan este gradiente opaco.
-- `--glass-bg`/`--glass-blur` (con `backdrop-filter`) se usan solo en los overlays que sí flotan sobre contenido de fotos: `ConfirmDialog`, `Lightbox`, `LoadingOverlay`.
-- El tema claro (`light.css`) define los **mismos nombres de token** (obligatorio — si no, las reglas de `base.css`/componentes quedan rotas al cambiar de tema) pero con valores casi imperceptibles (gradientes de 1-2 tonos, sin el highlight `inset` en las sombras, glow ambiental muy tenue) — es una decisión de diseño explícita, no un descuido: el pedido de "glossy" fue específicamente para oscuro.
+- `.bg-panel-gradient`/`.bg-panel-gradient-raised` (clases utilitarias, `gui/src/index.css`) sustituyen el fill plano `bg-card` en los paneles principales/anidados — los paneles normales, que están sobre el fondo plano de la app y no sobre fotos, usan este gradiente opaco.
+- `.glass` (con `backdrop-filter`) se usa solo en los overlays que sí flotan sobre contenido de fotos: `ConfirmDialog`, `Lightbox`, `LoadingOverlay`.
+- El tema claro (bloque `:root` de `index.css`) define los **mismos nombres de token** (obligatorio — si no, las clases utilitarias quedan rotas al cambiar de tema) pero con valores casi imperceptibles (gradientes de 1-2 tonos, sin el highlight `inset` en las sombras, glow ambiental muy tenue) — es una decisión de diseño explícita, no un descuido: el pedido de "glossy" fue específicamente para oscuro.
 
 ## Internacionalización (i18n)
 
-**Decisión de diseño**: la GUI soporta español e inglés mediante dos diccionarios planos, sin librería externa (consistente con el resto de la Fase 5: vanilla TS, sin dependencias más allá de lo estrictamente necesario). Todo el copy de `gui/src/**` (vistas y componentes) pasa por una función de lookup — nunca un string en español o inglés hardcodeado directamente en un template. Esto **no** aplica al texto que la GUI parsea desde stdout/stderr del propio `photoranker.exe` (logs de `tracing`, siempre en español) — traducir la salida del CLI está fuera de este alcance.
+**Decisión de diseño**: la GUI soporta español e inglés mediante dos diccionarios planos, sin librería de i18n externa (react-i18next, etc.) — no hace falta más que un `Record<string,string>` y una función de lookup. Todo el copy de `gui/src/**` (vistas y componentes) pasa por esa función — nunca un string en español o inglés hardcodeado directamente en un componente. Excepción deliberada: los nombres literales de subcomandos del CLI mostrados como texto de botón (ej. `prune`, `burst-detect`, `variable-create`) no se traducen — son el nombre real del comando, no copy de la interfaz. Esto **no** aplica al texto que la GUI parsea desde stdout/stderr del propio `photoranker.exe` (logs de `tracing`, siempre en español) — traducir la salida del CLI está fuera de este alcance.
 
 - **Diccionarios**: `gui/src/i18n/es.ts` y `gui/src/i18n/en.ts`, cada uno un `Record<string, string>` plano con el mismo conjunto de claves. Convención de nombres: `<vista_o_componente>.<área>.<elemento>` (ej. `home.init.scanning`, `tournament.hint.moveFocus`), más un namespace `common.*` para strings reusados entre vistas (botones como "Guardar"/"Cancelar").
 - **Lookup**: `gui/src/i18n/index.ts` expone `t(key: string, vars?: Record<string, string | number>): string`. Interpolación simple de `{varName}` sobre el string ya resuelto. Si la clave no existe en el idioma activo, cae a español; si tampoco existe ahí, devuelve `[[clave]]` y emite un `console.warn` — nunca rompe el render por una clave faltante.
@@ -100,7 +90,7 @@ La GUI llama a `get-thumbnail` por cada imagen visible en pantalla (torneo, ráf
 - [ ] Implementar la carga del tema embebido (`dark`/`light` según `config.toml`) + inyección opcional de `theme_path` como override, con fallback silencioso si el archivo no existe o es inválido.
 - [ ] Envolver todos los comandos anteriores como llamadas de subproceso desde Tauri.
 - [ ] Implementar navegación e interacción por teclado (flechas/Tab para foco, `1`–`5` para asignar posición, `Enter` para confirmar con validación de completitud, `Backspace`/`R` para reset) — replicando exactamente la mecánica descrita en `fase3-torneo.md`.
-- [ ] Feedback visual: foco = borde azul (`var(--color-focus-border)`); posición asignada = badge verde con número; empate = badge naranjo con ícono "=" (`var(--color-tie-badge)`).
+- [x] Feedback visual: foco = borde azul + halo (`hsl(var(--ring))`, clase `.focus-halo`); posición asignada = badge verde con número (`bg-success`); empate = badge naranjo con ícono "=" (`bg-tie-badge`, pulso vía `.animate-tie-pulse`).
 - [ ] Scree plot de BIC para `cluster --preview` (ver `fase2-clustering.md`).
 - [ ] Panel de referencia con métricas objetivas de calidad por imagen (valores e íconos de advertencia para baja nitidez o clipping, ver `fase1-ingesta.md`).
 
