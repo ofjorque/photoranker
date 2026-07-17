@@ -4,6 +4,16 @@ import { isTypingTarget } from '@/utils/dom';
 import { t } from '@/i18n';
 import { Html } from '@/components/Html';
 import { Button } from '@/components/ui/button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuSub,
+  ContextMenuSubContent,
+  ContextMenuSubTrigger,
+  ContextMenuTrigger,
+} from '@/components/ui/context-menu';
 import { openLightbox } from '@/components/Lightbox';
 import { cn } from '@/lib/utils';
 
@@ -73,12 +83,7 @@ export function RankingBoard({ dbPath, images, onSubmit, captionFor, onFocusChan
         const n = Number(e.key);
         if (Number.isInteger(n) && n >= 1 && n <= images.length) {
           e.preventDefault();
-          setPositions(prev => {
-            const next = new Map(prev);
-            next.set(images[focusedIndex].id, n);
-            return next;
-          });
-          setErrorMsg('');
+          assignPosition(images[focusedIndex].id, n);
         }
       }
     };
@@ -86,6 +91,15 @@ export function RankingBoard({ dbPath, images, onSubmit, captionFor, onFocusChan
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   });
+
+  const assignPosition = (imageId: number, pos: number) => {
+    setPositions(prev => {
+      const next = new Map(prev);
+      next.set(imageId, pos);
+      return next;
+    });
+    setErrorMsg('');
+  };
 
   const trySubmit = () => {
     const missing = images.filter((img) => !positions.has(img.id));
@@ -120,47 +134,69 @@ export function RankingBoard({ dbPath, images, onSubmit, captionFor, onFocusChan
           const name = img.file_path.split(/[\\/]/).pop() ?? img.file_path;
 
           return (
-            <div 
-              key={img.id} 
-              onClick={() => setFocusedIndex(idx)}
-              className={cn(
-                "ranking-card relative flex flex-col rounded-md border-2 overflow-hidden transition-colors cursor-pointer bg-card text-card-foreground",
-                isFocused ? "border-primary focus-halo" : "border-border hover:border-border/80"
-              )}
-            >
-              <div className="relative aspect-[3/2] bg-muted flex items-center justify-center">
-                {thumb ? (
-                  <img
-                    src={thumb}
-                    alt={name}
-                    className="w-full h-full object-contain cursor-zoom-in"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openLightbox(thumb, name);
-                    }}
-                  />
-                ) : (
-                  <span className="text-muted-foreground text-sm">{t('common.loading')}</span>
-                )}
-                {pos !== undefined && (
-                  <div
-                    title={isTied ? t('rankingBoard.badge.tied', { pos }) : t('rankingBoard.badge.position', { pos })}
-                    className={cn(
-                      "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md",
-                      isTied
-                        ? "bg-tie-badge text-tie-badge-foreground animate-tie-pulse"
-                        : "bg-success text-success-foreground",
+            <ContextMenu key={img.id}>
+              <ContextMenuTrigger asChild>
+                <div
+                  onClick={() => setFocusedIndex(idx)}
+                  className={cn(
+                    "ranking-card relative flex flex-col rounded-md border-2 overflow-hidden transition-colors cursor-pointer bg-card text-card-foreground",
+                    isFocused ? "border-primary focus-halo" : "border-border hover:border-border/80"
+                  )}
+                >
+                  <div className="relative aspect-[3/2] bg-muted flex items-center justify-center">
+                    {thumb ? (
+                      <img
+                        src={thumb}
+                        alt={name}
+                        className="w-full h-full object-contain cursor-zoom-in"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openLightbox(thumb, name);
+                        }}
+                      />
+                    ) : (
+                      <span className="text-muted-foreground text-sm">{t('common.loading')}</span>
                     )}
-                  >
-                    {isTied ? `=${pos}` : pos}
+                    {pos !== undefined && (
+                      <div
+                        title={isTied ? t('rankingBoard.badge.tied', { pos }) : t('rankingBoard.badge.position', { pos })}
+                        className={cn(
+                          "absolute top-2 right-2 w-8 h-8 rounded-full flex items-center justify-center font-bold shadow-md",
+                          isTied
+                            ? "bg-tie-badge text-tie-badge-foreground animate-tie-pulse"
+                            : "bg-success text-success-foreground",
+                        )}
+                      >
+                        {isTied ? `=${pos}` : pos}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-              <div className="p-2 text-xs truncate" title={img.file_path}>
-                <div className="truncate font-medium">{name}</div>
-                {captionFor && <div className="text-muted-foreground">{captionFor(img)}</div>}
-              </div>
-            </div>
+                  <div className="p-2 text-xs truncate" title={img.file_path}>
+                    <div className="truncate font-medium">{name}</div>
+                    {captionFor && <div className="text-muted-foreground">{captionFor(img)}</div>}
+                  </div>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <ContextMenuItem onClick={() => setFocusedIndex(idx)}>
+                  {t('rankingBoard.contextMenu.focus')}
+                </ContextMenuItem>
+                <ContextMenuItem disabled={!thumb} onClick={() => thumb && openLightbox(thumb, name)}>
+                  {t('rankingBoard.contextMenu.viewLarge')}
+                </ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuSub>
+                  <ContextMenuSubTrigger>{t('rankingBoard.contextMenu.assignPosition')}</ContextMenuSubTrigger>
+                  <ContextMenuSubContent>
+                    {images.map((_, n) => (
+                      <ContextMenuItem key={n} onClick={() => assignPosition(img.id, n + 1)}>
+                        {n + 1}
+                      </ContextMenuItem>
+                    ))}
+                  </ContextMenuSubContent>
+                </ContextMenuSub>
+              </ContextMenuContent>
+            </ContextMenu>
           );
         })}
       </div>

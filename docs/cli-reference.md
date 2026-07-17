@@ -124,6 +124,11 @@ photoranker get-thumbnail --image-id 42
 
 # Métricas objetivas de calidad de una imagen (panel de referencia de la GUI)
 photoranker get-quality-metrics --image-id 42
+
+# --- Fase 7: Mejoras post-MVP (ver fase7-mejoras-post-mvp.md) ---
+
+# Listar TODAS las imágenes de un cluster (no solo las representativas de list-clusters), con su probabilidad
+photoranker list-cluster-images --id 3
 ```
 
 ## Ver también

@@ -11,6 +11,7 @@ import type {
   ClusterCommitResult,
   ClusterPreviewResult,
   ClusterRenameResult,
+  ClusterRepresentativeImage,
   ClusterSummary,
   ExportXmpResult,
   FailedThumbnail,
@@ -147,6 +148,14 @@ export const cli = {
   resetGlobalIndex: () => callCli<ResetGlobalIndexResult>(['reset-global-index']),
 
   listClusters: (dbPath: string) => callCli<ClusterSummary[]>(['list-clusters', ...dbArgs(dbPath)]),
+
+  listClusterImages: (dbPath: string, clusterId: number) =>
+    callCli<ClusterRepresentativeImage[]>([
+      'list-cluster-images',
+      '--id',
+      String(clusterId),
+      ...dbArgs(dbPath),
+    ]),
 
   listFailedThumbnails: (dbPath: string) =>
     callCli<FailedThumbnail[]>(['list-failed-thumbnails', ...dbArgs(dbPath)]),

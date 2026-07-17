@@ -12,6 +12,7 @@ import { t } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { FolderOpen, Undo2, Database, RefreshCw, Layers, Trophy } from 'lucide-react';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { showLoadingOverlay } from '@/components/LoadingOverlay';
@@ -105,70 +106,80 @@ export function HomeView() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">{t('home.title')}</h1>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t('home.folder.label')}</CardTitle>
-        </CardHeader>
-        <CardContent className="flex gap-4">
-          <Input
-            value={folderInput}
-            onChange={(e) => setFolderInput(e.target.value)}
-            placeholder={t('home.folder.placeholder')}
-            className="flex-1"
-          />
-          <Button variant="secondary" onClick={handlePickFolder} disabled={isBusy}>
-            <FolderOpen className="w-4 h-4 mr-2" />
-            {t('home.folder.pick')}
-          </Button>
-        </CardContent>
-        <CardFooter>
-          <Button onClick={handleInit} disabled={isBusy} className="w-full sm:w-auto">
-            {t('home.init.button')}
-          </Button>
-        </CardFooter>
-      </Card>
+      <Tabs defaultValue="ingest">
+        <TabsList>
+          <TabsTrigger value="ingest">{t('home.tabs.ingest')}</TabsTrigger>
+          <TabsTrigger value="maintenance">{t('home.tabs.maintenance')}</TabsTrigger>
+          <TabsTrigger value="dangerZone">{t('home.tabs.dangerZone')}</TabsTrigger>
+        </TabsList>
 
-      {project && (
-        <>
+        <TabsContent value="ingest" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">
-                <Html html={t('home.actions.heading', { folderPath: project.folderPath })} />
-              </CardTitle>
+              <CardTitle className="text-lg">{t('home.folder.label')}</CardTitle>
             </CardHeader>
-            <CardContent className="flex flex-wrap gap-4">
-              <Button
-                variant="outline"
-                disabled={isBusy}
-                onClick={async () => {
-                  const data = await runCliAction('prune', () => cli.prune(project.dbPath));
-                  if (data) showToast(t('home.prune.result', { count: data.marked_missing }));
-                }}
-              >
-                prune
-              </Button>
-              <Button
-                variant="outline"
-                disabled={isBusy}
-                onClick={async () => {
-                  const data = await runCliAction('burst-detect', () => cli.burstDetect(project.dbPath));
-                  if (data) showToast(t('home.burstDetect.result', { count: data.bursts_created }));
-                }}
-              >
-                burst-detect
-              </Button>
-              <Button onClick={() => navigate('bursts')} disabled={isBusy}>
-                <Layers className="w-4 h-4 mr-2" />
-                {t('home.actions.gotoBursts')}
-              </Button>
-              <Button onClick={() => navigate('tournament')} disabled={isBusy}>
-                <Trophy className="w-4 h-4 mr-2" />
-                {t('home.actions.gotoTournament')}
+            <CardContent className="flex gap-4">
+              <Input
+                value={folderInput}
+                onChange={(e) => setFolderInput(e.target.value)}
+                placeholder={t('home.folder.placeholder')}
+                className="flex-1"
+              />
+              <Button variant="secondary" onClick={handlePickFolder} disabled={isBusy}>
+                <FolderOpen className="w-4 h-4 mr-2" />
+                {t('home.folder.pick')}
               </Button>
             </CardContent>
+            <CardFooter>
+              <Button onClick={handleInit} disabled={isBusy} className="w-full sm:w-auto">
+                {t('home.init.button')}
+              </Button>
+            </CardFooter>
           </Card>
 
-          {result && (
+          {project && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">
+                  <Html html={t('home.actions.heading', { folderPath: project.folderPath })} />
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-4">
+                <Button
+                  variant="outline"
+                  disabled={isBusy}
+                  onClick={async () => {
+                    const data = await runCliAction('prune', () => cli.prune(project.dbPath));
+                    if (data) showToast(t('home.prune.result', { count: data.marked_missing }));
+                  }}
+                >
+                  prune
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={isBusy}
+                  onClick={async () => {
+                    const data = await runCliAction('burst-detect', () => cli.burstDetect(project.dbPath));
+                    if (data) showToast(t('home.burstDetect.result', { count: data.bursts_created }));
+                  }}
+                >
+                  burst-detect
+                </Button>
+                <Button onClick={() => navigate('bursts')} disabled={isBusy}>
+                  <Layers className="w-4 h-4 mr-2" />
+                  {t('home.actions.gotoBursts')}
+                </Button>
+                <Button onClick={() => navigate('tournament')} disabled={isBusy}>
+                  <Trophy className="w-4 h-4 mr-2" />
+                  {t('home.actions.gotoTournament')}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+
+        <TabsContent value="maintenance">
+          {result ? (
             <Card className="bg-muted">
               <CardHeader>
                 <CardTitle className="text-md">{result.title}</CardTitle>
@@ -177,88 +188,94 @@ export function HomeView() {
                 <pre className="text-xs overflow-auto">{JSON.stringify(result.data, null, 2)}</pre>
               </CardContent>
             </Card>
+          ) : (
+            <p className="text-sm text-muted-foreground">{t('home.maintenance.empty')}</p>
+          )}
+        </TabsContent>
+
+        <TabsContent value="dangerZone" className="space-y-6">
+          {project && (
+            <Card className="border-destructive/50">
+              <CardHeader>
+                <CardTitle className="text-lg text-destructive">{t('home.dangerZone.title')}</CardTitle>
+                <p className="text-sm text-muted-foreground">{t('home.dangerZone.description')}</p>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-4">
+                <Button
+                  variant="outline"
+                  disabled={isBusy}
+                  onClick={async () => {
+                    const data = await runCliAction('tournament-undo', () => cli.tournamentUndo(project.dbPath));
+                    if (data) {
+                      showToast(
+                        t('home.undo.result', { groupId: data.group_id.slice(0, 8), count: data.reverted_images.length }),
+                      );
+                    }
+                  }}
+                >
+                  <Undo2 className="w-4 h-4 mr-2" />
+                  {t('home.dangerZone.undo')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={isBusy}
+                  onClick={async () => {
+                    const data = await runCliAction('tournament-reset', () => cli.tournamentReset(project.dbPath), {
+                      title: t('home.resetTournament.confirmTitle'),
+                      message: t('home.resetTournament.confirmMessage', { folderPath: project.folderPath }),
+                      confirmLabel: t('home.resetTournament.confirmLabel'),
+                      danger: true,
+                    });
+                    if (data) showToast(t('home.resetTournament.result', { count: data.images_reset }));
+                  }}
+                >
+                  {t('home.dangerZone.reset')}
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
           <Card className="border-destructive/50">
             <CardHeader>
-              <CardTitle className="text-lg text-destructive">{t('home.dangerZone.title')}</CardTitle>
-              <p className="text-sm text-muted-foreground">{t('home.dangerZone.description')}</p>
+              <CardTitle className="text-lg text-destructive">{t('home.globalIndex.title')}</CardTitle>
+              <Html className="text-sm text-muted-foreground" html={t('home.globalIndex.description')} />
             </CardHeader>
             <CardContent className="flex flex-wrap gap-4">
-              <Button
-                variant="outline"
-                disabled={isBusy}
-                onClick={async () => {
-                  const data = await runCliAction('tournament-undo', () => cli.tournamentUndo(project.dbPath));
-                  if (data) {
-                    showToast(
-                      t('home.undo.result', { groupId: data.group_id.slice(0, 8), count: data.reverted_images.length }),
-                    );
-                  }
-                }}
-              >
-                <Undo2 className="w-4 h-4 mr-2" />
-                {t('home.dangerZone.undo')}
-              </Button>
+              {project && (
+                <Button
+                  variant="outline"
+                  disabled={isBusy}
+                  title={t('home.globalIndex.resyncTitle')}
+                  onClick={async () => {
+                    const data = await runCliAction('resync-global', () => cli.resyncGlobal(project.folderPath));
+                    if (data) showToast(t('home.resyncGlobal.result', { count: data.rows_updated }));
+                  }}
+                >
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  resync-global
+                </Button>
+              )}
               <Button
                 variant="destructive"
                 disabled={isBusy}
+                title={t('home.globalIndex.resetTitle')}
                 onClick={async () => {
-                  const data = await runCliAction('tournament-reset', () => cli.tournamentReset(project.dbPath), {
-                    title: t('home.resetTournament.confirmTitle'),
-                    message: t('home.resetTournament.confirmMessage', { folderPath: project.folderPath }),
-                    confirmLabel: t('home.resetTournament.confirmLabel'),
+                  const data = await runCliAction('reset-global-index', () => cli.resetGlobalIndex(), {
+                    title: t('home.resetGlobal.confirmTitle'),
+                    message: t('home.resetGlobal.confirmMessage'),
+                    confirmLabel: t('home.resetGlobal.confirmLabel'),
                     danger: true,
                   });
-                  if (data) showToast(t('home.resetTournament.result', { count: data.images_reset }));
+                  if (data) showToast(t('home.resetGlobal.result', { count: data.rows_deleted }));
                 }}
               >
-                {t('home.dangerZone.reset')}
+                <Database className="w-4 h-4 mr-2" />
+                reset-global-index
               </Button>
             </CardContent>
           </Card>
-        </>
-      )}
-
-      <Card className="border-destructive/50">
-        <CardHeader>
-          <CardTitle className="text-lg text-destructive">{t('home.globalIndex.title')}</CardTitle>
-          <Html className="text-sm text-muted-foreground" html={t('home.globalIndex.description')} />
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-4">
-          {project && (
-            <Button
-              variant="outline"
-              disabled={isBusy}
-              title={t('home.globalIndex.resyncTitle')}
-              onClick={async () => {
-                const data = await runCliAction('resync-global', () => cli.resyncGlobal(project.folderPath));
-                if (data) showToast(t('home.resyncGlobal.result', { count: data.rows_updated }));
-              }}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              resync-global
-            </Button>
-          )}
-          <Button
-            variant="destructive"
-            disabled={isBusy}
-            title={t('home.globalIndex.resetTitle')}
-            onClick={async () => {
-              const data = await runCliAction('reset-global-index', () => cli.resetGlobalIndex(), {
-                title: t('home.resetGlobal.confirmTitle'),
-                message: t('home.resetGlobal.confirmMessage'),
-                confirmLabel: t('home.resetGlobal.confirmLabel'),
-                danger: true,
-              });
-              if (data) showToast(t('home.resetGlobal.result', { count: data.rows_deleted }));
-            }}
-          >
-            <Database className="w-4 h-4 mr-2" />
-            reset-global-index
-          </Button>
-        </CardContent>
-      </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

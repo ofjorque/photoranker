@@ -10,6 +10,7 @@ import { Loader2, RefreshCw, Info } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { PhotoDetailsDrawer } from '@/components/PhotoDetailsDrawer';
 
 export function ExportView() {
@@ -134,33 +135,42 @@ export function ExportView() {
                 </thead>
                 <tbody className="divide-y">
                   {ranking.map((r, i) => (
-                    <tr key={r.file_path} className="hover:bg-muted/50">
-                      <td className="px-4 py-2 font-mono text-muted-foreground">{i + 1}</td>
-                      <td className="px-4 py-2 truncate max-w-[200px]" title={r.file_path}>
-                        {r.file_path.split(/[\\/]/).pop()}
-                      </td>
-                      <td className="px-4 py-2 font-mono">{r.mu.toFixed(2)}</td>
-                      <td className="px-4 py-2 font-mono">{r.sigma.toFixed(2)}</td>
-                      <td className="px-4 py-2">
-                        {r.rejected ? (
-                          <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">rejected</span>
-                        ) : r.stalled ? (
-                          <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">stalled</span>
-                        ) : (
-                          <span className="text-xs bg-green-500/10 text-green-600 px-2 py-1 rounded">{t('export.liveRanking.active')}</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title={t('photoDetails.viewDetails')}
-                          onClick={() => setDetailsImageId(r.id)}
-                        >
-                          <Info className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    </tr>
+                    <ContextMenu key={r.file_path}>
+                      <ContextMenuTrigger asChild>
+                        <tr className="hover:bg-muted/50">
+                          <td className="px-4 py-2 font-mono text-muted-foreground">{i + 1}</td>
+                          <td className="px-4 py-2 truncate max-w-[200px]" title={r.file_path}>
+                            {r.file_path.split(/[\\/]/).pop()}
+                          </td>
+                          <td className="px-4 py-2 font-mono">{r.mu.toFixed(2)}</td>
+                          <td className="px-4 py-2 font-mono">{r.sigma.toFixed(2)}</td>
+                          <td className="px-4 py-2">
+                            {r.rejected ? (
+                              <span className="text-xs bg-destructive/10 text-destructive px-2 py-1 rounded">rejected</span>
+                            ) : r.stalled ? (
+                              <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded">stalled</span>
+                            ) : (
+                              <span className="text-xs bg-green-500/10 text-green-600 px-2 py-1 rounded">{t('export.liveRanking.active')}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-2 text-right">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title={t('photoDetails.viewDetails')}
+                              onClick={() => setDetailsImageId(r.id)}
+                            >
+                              <Info className="w-4 h-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      </ContextMenuTrigger>
+                      <ContextMenuContent>
+                        <ContextMenuItem onClick={() => setDetailsImageId(r.id)}>
+                          {t('photoDetails.viewDetails')}
+                        </ContextMenuItem>
+                      </ContextMenuContent>
+                    </ContextMenu>
                   ))}
                 </tbody>
               </table>

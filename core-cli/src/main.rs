@@ -175,6 +175,14 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Lista todas las imágenes de un cluster (no solo las representativas), con su probabilidad.
+    #[command(name = "list-cluster-images")]
+    ListClusterImages {
+        #[arg(long)]
+        id: i64,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Renombra un cluster antes de exportarlo como tag.
     #[command(name = "cluster-rename")]
     ClusterRename {
@@ -445,6 +453,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let conn = db::open_local(&db_path)?;
             commands::cluster::list(&conn)
+        }
+        Commands::ListClusterImages { id, db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::cluster::list_images(&conn, id)
         }
         Commands::ClusterRename { id, name, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;

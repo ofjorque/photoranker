@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { cli, CliError } from '@/api';
-import type { ClusterSummary } from '@/api/types';
+import type { ClusterRepresentativeImage, ClusterSummary } from '@/api/types';
 import { getProject } from '@/state';
 import { showToast } from '@/toast';
 import { getThumbnailDataUrl } from '@/api/thumbnailCache';
@@ -13,6 +13,9 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Loader2, Info } from 'lucide-react';
 import { Html } from '@/components/Html';
 import { openLightbox } from '@/components/Lightbox';
@@ -28,7 +31,13 @@ export function ClusterView() {
   const [thumbnails, setThumbnails] = useState<Record<number, string>>({});
   const [renameInputs, setRenameInputs] = useState<Record<string, string>>({});
   const [detailsImageId, setDetailsImageId] = useState<number | null>(null);
-  
+
+  // "Ver todas" (todas las imágenes de un cluster, no solo las
+  // representativas) — ver docs/fase7-mejoras-post-mvp.md.
+  const [viewingCluster, setViewingCluster] = useState<ClusterSummary | null>(null);
+  const [clusterImages, setClusterImages] = useState<ClusterRepresentativeImage[]>([]);
+  const [clusterImagesLoading, setClusterImagesLoading] = useState(false);
+
   // Preview state
   const [previewBusy, setPreviewBusy] = useState(false);
   const [bicByK, setBicByK] = useState<Record<string, number> | null>(null);
@@ -88,6 +97,26 @@ export function ClusterView() {
       await loadClusters();
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
+    }
+  };
+
+  const openClusterImages = async (cluster: ClusterSummary) => {
+    if (!project) return;
+    setViewingCluster(cluster);
+    setClusterImages([]);
+    setClusterImagesLoading(true);
+    try {
+      const images = await cli.listClusterImages(project.dbPath, cluster.id);
+      setClusterImages(images);
+      for (const img of images) {
+        if (thumbnails[img.id]) continue;
+        const url = await getThumbnailDataUrl(project.dbPath, img.id);
+        if (url) setThumbnails(prev => ({ ...prev, [img.id]: url }));
+      }
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    } finally {
+      setClusterImagesLoading(false);
     }
   };
 
@@ -224,38 +253,57 @@ export function ClusterView() {
                     <strong className="truncate font-medium" title={cluster.name || String(cluster.id)}>
                       {cluster.name ?? t('cluster.card.unnamed', { id: String(cluster.id).substring(0, 6) })}
                     </strong>
-                    <span className="text-xs bg-muted text-muted-foreground px-2 py-1 rounded-full whitespace-nowrap">
-                      {t('cluster.card.photoCount', { count: cluster.member_count })}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() => openClusterImages(cluster)}
+                      className="text-xs bg-muted text-muted-foreground hover:text-foreground px-2 py-1 rounded-full whitespace-nowrap transition-colors"
+                    >
+                      {t('cluster.card.viewAll', { count: cluster.member_count })}
+                    </button>
                   </div>
-                  
-                  <div 
-                    className="grid gap-1 mb-4" 
+
+                  <div
+                    className="grid gap-1 mb-4"
                     style={{ gridTemplateColumns: `repeat(${cluster.representative_images.length || 1}, 1fr)` }}
                   >
                     {cluster.representative_images.map(img => (
-                      <div key={img.id} className="relative aspect-square bg-muted rounded overflow-hidden">
-                        {thumbnails[img.id] ? (
-                          <img
-                            src={thumbnails[img.id]}
-                            className="w-full h-full object-cover cursor-zoom-in"
+                      <ContextMenu key={img.id}>
+                        <ContextMenuTrigger asChild>
+                          <div className="relative aspect-square bg-muted rounded overflow-hidden">
+                            {thumbnails[img.id] ? (
+                              <img
+                                src={thumbnails[img.id]}
+                                className="w-full h-full object-cover cursor-zoom-in"
+                                onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                              />
+                            ) : (
+                              <Skeleton className="w-full h-full rounded-none" />
+                            )}
+                            <button
+                              type="button"
+                              title={t('photoDetails.viewDetails')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDetailsImageId(img.id);
+                              }}
+                              className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
+                            >
+                              <Info className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </ContextMenuTrigger>
+                        <ContextMenuContent>
+                          <ContextMenuItem
+                            disabled={!thumbnails[img.id]}
                             onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
-                          />
-                        ) : (
-                          <Skeleton className="w-full h-full rounded-none" />
-                        )}
-                        <button
-                          type="button"
-                          title={t('photoDetails.viewDetails')}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDetailsImageId(img.id);
-                          }}
-                          className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
-                        >
-                          <Info className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                          >
+                            {t('rankingBoard.contextMenu.viewLarge')}
+                          </ContextMenuItem>
+                          <ContextMenuItem onClick={() => setDetailsImageId(img.id)}>
+                            {t('photoDetails.viewDetails')}
+                          </ContextMenuItem>
+                        </ContextMenuContent>
+                      </ContextMenu>
                     ))}
                   </div>
 
@@ -277,6 +325,76 @@ export function ClusterView() {
       </Card>
       </TabsContent>
       </Tabs>
+
+      <Sheet open={viewingCluster !== null} onOpenChange={(open) => !open && setViewingCluster(null)}>
+        <SheetContent className="w-full sm:max-w-md flex flex-col">
+          <SheetHeader>
+            <SheetTitle>
+              {t('cluster.allImages.title', {
+                name: viewingCluster?.name ?? t('cluster.card.unnamed', { id: String(viewingCluster?.id ?? '').substring(0, 6) }),
+              })}
+            </SheetTitle>
+            <SheetDescription>{t('cluster.allImages.description')}</SheetDescription>
+          </SheetHeader>
+          {clusterImagesLoading ? (
+            <div className="text-muted-foreground text-sm mt-4">{t('cluster.allImages.loading')}</div>
+          ) : (
+            <ScrollArea className="flex-1 -mx-6 px-6">
+              <div className="space-y-3 pb-4">
+                {clusterImages.map(img => (
+                  <ContextMenu key={img.id}>
+                    <ContextMenuTrigger asChild>
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-14 h-14 shrink-0 rounded overflow-hidden bg-muted">
+                          {thumbnails[img.id] ? (
+                            <img
+                              src={thumbnails[img.id]}
+                              className="w-full h-full object-cover cursor-zoom-in"
+                              onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                            />
+                          ) : (
+                            <Skeleton className="w-full h-full rounded-none" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="truncate text-sm" title={img.file_path}>
+                            {img.file_path.split(/[\\/]/).pop()}
+                          </div>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Progress value={(img.probability ?? 0) * 100} className="h-1.5" />
+                            <span className="text-xs font-mono text-muted-foreground w-10 text-right shrink-0">
+                              {((img.probability ?? 0) * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          title={t('photoDetails.viewDetails')}
+                          onClick={() => setDetailsImageId(img.id)}
+                        >
+                          <Info className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        disabled={!thumbnails[img.id]}
+                        onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                      >
+                        {t('rankingBoard.contextMenu.viewLarge')}
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => setDetailsImageId(img.id)}>
+                        {t('photoDetails.viewDetails')}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <PhotoDetailsDrawer
         dbPath={project.dbPath}

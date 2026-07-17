@@ -280,3 +280,42 @@ pub fn list(conn: &Connection) -> AppResult<Value> {
 
     Ok(json!(clusters))
 }
+
+/// `list-cluster-images --id <N>`: solo lectura, sin backup — devuelve
+/// **todas** las imágenes de un cluster con su `probability`, no solo las
+/// `REPRESENTATIVE_IMAGES_PER_CLUSTER` de `list-clusters` (ver
+/// fase7-mejoras-post-mvp.md, "Ver todas las imágenes de un cluster +
+/// representatividad"). `CLUSTER_NOT_FOUND` si el id no existe.
+pub fn list_images(conn: &Connection, id: i64) -> AppResult<Value> {
+    let exists: bool = conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM clusters WHERE id = ?1)",
+        params![id],
+        |r| r.get(0),
+    )?;
+    if !exists {
+        return Err(AppError::ClusterNotFound(id));
+    }
+
+    let mut stmt = conn.prepare(
+        "SELECT i.id, i.file_path, ic.probability \
+         FROM image_clusters ic \
+         JOIN images i ON i.id = ic.image_id \
+         WHERE ic.cluster_id = ?1 \
+         ORDER BY ic.probability DESC, i.id ASC",
+    )?;
+    let images: Vec<Value> = stmt
+        .query_map(params![id], |r| {
+            let image_id: i64 = r.get(0)?;
+            let file_path: String = r.get(1)?;
+            let probability: Option<f64> = r.get(2)?;
+            Ok(json!({
+                "id": image_id,
+                "file_path": file_path,
+                "probability": probability,
+            }))
+        })?
+        .filter_map(|r| r.ok())
+        .collect();
+
+    Ok(json!(images))
+}

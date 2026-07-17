@@ -122,6 +122,75 @@ fn list_clusters_returns_representative_images_ordered_by_probability() {
 }
 
 #[test]
+fn list_cluster_images_returns_all_members_not_just_representatives() {
+    let tmp = TempDir::new("list_cluster_images");
+    let folder = &tmp.0;
+    for i in 0..6 {
+        write_solid_jpeg(&folder.join(format!("img{i}.jpg")), (i * 10) as u8);
+    }
+
+    let db_path = folder.join(".photoranker.sqlite");
+    let db_arg = db_path.to_string_lossy().to_string();
+    let path_arg = folder.to_string_lossy().to_string();
+    run_cli(&["init", "--path", &path_arg]);
+
+    let conn = rusqlite::Connection::open(&db_path).unwrap();
+    let image_ids: Vec<i64> = {
+        let mut stmt = conn.prepare("SELECT id FROM images ORDER BY id").unwrap();
+        stmt.query_map([], |r| r.get(0))
+            .unwrap()
+            .filter_map(|r| r.ok())
+            .collect()
+    };
+    conn.execute("INSERT INTO clusters (name) VALUES (NULL)", [])
+        .unwrap();
+    let cluster_id = conn.last_insert_rowid();
+    // 5 imágenes en el cluster (más que REPRESENTATIVE_IMAGES_PER_CLUSTER=4
+    // de list-clusters) — a diferencia de ese comando, acá deben venir las 5.
+    let probs = [0.95, 0.4, 0.9, 0.6, 0.8];
+    for (i, &p) in probs.iter().enumerate() {
+        conn.execute(
+            "INSERT INTO image_clusters (image_id, cluster_id, probability) VALUES (?1, ?2, ?3)",
+            rusqlite::params![image_ids[i], cluster_id, p],
+        )
+        .unwrap();
+    }
+    drop(conn);
+
+    let cluster_id_arg = cluster_id.to_string();
+    let listed = run_cli(&[
+        "list-cluster-images",
+        "--id",
+        &cluster_id_arg,
+        "--db",
+        &db_arg,
+    ]);
+    assert_eq!(
+        listed["status"], "ok",
+        "list-cluster-images falló: {listed}"
+    );
+    let images = listed["data"].as_array().unwrap();
+    assert_eq!(
+        images.len(),
+        5,
+        "deben venir las 5 imágenes, no recortadas a 4"
+    );
+    let probabilities: Vec<f64> = images
+        .iter()
+        .map(|r| r["probability"].as_f64().unwrap())
+        .collect();
+    assert_eq!(
+        probabilities,
+        vec![0.95, 0.9, 0.8, 0.6, 0.4],
+        "deben venir ordenadas por probability desc"
+    );
+
+    let missing = run_cli(&["list-cluster-images", "--id", "999999", "--db", &db_arg]);
+    assert_eq!(missing["status"], "error");
+    assert_eq!(missing["code"], "CLUSTER_NOT_FOUND");
+}
+
+#[test]
 fn get_variable_values_reports_null_for_untagged_and_excludes_rejected() {
     let tmp = TempDir::new("var_values");
     let folder = &tmp.0;

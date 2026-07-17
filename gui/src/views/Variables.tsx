@@ -9,14 +9,21 @@ import { isTypingTarget } from '@/utils/dom';
 import { t } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Trash2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Trash2, Info } from 'lucide-react';
 import { Html } from '@/components/Html';
 import { openLightbox } from '@/components/Lightbox';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { VariableBuilder, type VariableBuilderInput } from '@/components/VariableBuilder';
+import { PhotoDetailsDrawer } from '@/components/PhotoDetailsDrawer';
+
+interface VariableCardImage {
+  id: number;
+  file_path: string;
+  values: Record<string, number | null>;
+}
 
 export function VariablesView() {
   const [project] = useState(getProject);
@@ -25,16 +32,18 @@ export function VariablesView() {
 
   const [createBusy, setCreateBusy] = useState(false);
 
-  // Batch state
-  const [batchVar, setBatchVar] = useState('');
-  const [batchValues, setBatchValues] = useState('');
-  const [batchBusy, setBatchBusy] = useState(false);
-
   // Classifier state
   const [classifyVar, setClassifyVar] = useState('');
   const [classifyEntries, setClassifyEntries] = useState<VariableValueEntry[]>([]);
   const [classifyIndex, setClassifyIndex] = useState(-1);
   const [classifyThumb, setClassifyThumb] = useState<string>('');
+
+  // Vista de tarjetas (fotos × todas sus variables) — ver
+  // docs/fase7-mejoras-post-mvp.md.
+  const [cardImages, setCardImages] = useState<VariableCardImage[]>([]);
+  const [cardsLoading, setCardsLoading] = useState(false);
+  const [cardThumbnails, setCardThumbnails] = useState<Record<number, string>>({});
+  const [cardsDetailsImageId, setCardsDetailsImageId] = useState<number | null>(null);
 
   const loadVariables = useCallback(async () => {
     if (!project) return;
@@ -42,10 +51,8 @@ export function VariablesView() {
       const vars = await cli.variableList(project.dbPath);
       setVariables(vars);
       if (vars.length > 0) {
-        if (!batchVar || !vars.find(v => v.name === batchVar)) setBatchVar(vars[0].name);
         if (!classifyVar || !vars.find(v => v.name === classifyVar)) setClassifyVar(vars[0].name);
       } else {
-        setBatchVar('');
         setClassifyVar('');
       }
     } catch (e) {
@@ -53,7 +60,7 @@ export function VariablesView() {
     } finally {
       setLoading(false);
     }
-  }, [project, batchVar, classifyVar]);
+  }, [project, classifyVar]);
 
   useEffect(() => {
     loadVariables();
@@ -77,53 +84,69 @@ export function VariablesView() {
     }
   };
 
-  const handleCreate = async (input: VariableBuilderInput) => {
+  const handleCreate = async (inputs: VariableBuilderInput[]) => {
     if (!project) return;
     setCreateBusy(true);
+    let created = 0;
     try {
-      await cli.variableCreate(project.dbPath, input.name, input.varType, {
-        min: input.min,
-        max: input.max,
-        categories: input.categories,
-      });
-      showToast(t('variables.create.created', { name: input.name }));
+      for (const input of inputs) {
+        try {
+          await cli.variableCreate(project.dbPath, input.name, input.varType, {
+            min: input.min,
+            max: input.max,
+            categories: input.categories,
+          });
+          created += 1;
+        } catch (e) {
+          showToast(`${input.name}: ${e instanceof CliError ? e.message : String(e)}`, true);
+        }
+      }
+      if (created > 0) {
+        showToast(
+          inputs.length === 1
+            ? t('variables.create.created', { name: inputs[0].name })
+            : t('variables.create.createdMany', { count: created }),
+        );
+      }
       await loadVariables();
-    } catch (e) {
-      showToast(e instanceof CliError ? e.message : String(e), true);
     } finally {
       setCreateBusy(false);
     }
   };
 
-  const handleBatchSet = async () => {
-    if (!project) return;
-    const lines = batchValues.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const values: Array<[number, number]> = [];
-    for (const line of lines) {
-      const [idStr, valStr] = line.split(':');
-      const id = Number(idStr);
-      const val = Number(valStr);
-      if (!Number.isFinite(id) || !Number.isFinite(val)) {
-        showToast(t('variables.batch.invalidLine', { line }), true);
-        return;
-      }
-      values.push([id, val]);
-    }
-    if (!batchVar || values.length === 0) {
-      showToast(t('variables.batch.needVariableAndValues'), true);
-      return;
-    }
-    setBatchBusy(true);
+  const loadCards = useCallback(async () => {
+    if (!project || variables.length === 0) return;
+    setCardsLoading(true);
     try {
-      const result = await cli.variableSet(project.dbPath, batchVar, values);
-      showToast(t('variables.batch.result', { count: result.values_set, variable: batchVar }));
-      setBatchValues('');
+      const byImage = new Map<number, VariableCardImage>();
+      for (const v of variables) {
+        const entries = await cli.getVariableValues(project.dbPath, v.name);
+        for (const entry of entries) {
+          let card = byImage.get(entry.id);
+          if (!card) {
+            card = { id: entry.id, file_path: entry.file_path, values: {} };
+            byImage.set(entry.id, card);
+          }
+          card.values[v.name] = entry.value;
+        }
+      }
+      const images = Array.from(byImage.values()).sort((a, b) => a.id - b.id);
+      setCardImages(images);
+      for (const img of images) {
+        if (cardThumbnails[img.id]) continue;
+        const url = await getThumbnailDataUrl(project.dbPath, img.id);
+        if (url) setCardThumbnails(prev => ({ ...prev, [img.id]: url }));
+      }
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     } finally {
-      setBatchBusy(false);
+      setCardsLoading(false);
     }
-  };
+    // cardThumbnails deliberadamente fuera de deps (mismo motivo que
+    // Cluster.tsx): agregarla recrearía este callback en cada thumbnail
+    // cargado y produciría un loop de refetch.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [project, variables]);
 
   const startClassify = async () => {
     if (!project || !classifyVar) {
@@ -313,10 +336,16 @@ export function VariablesView() {
     <div className="p-6 max-w-4xl mx-auto space-y-6">
       <h1 className="text-3xl font-bold tracking-tight">{t('variables.title')}</h1>
 
-      <Tabs defaultValue="build">
+      <Tabs
+        defaultValue="build"
+        onValueChange={(value) => {
+          if (value === 'cards' && cardImages.length === 0) loadCards();
+        }}
+      >
         <TabsList>
           <TabsTrigger value="build">{t('variables.tabs.build')}</TabsTrigger>
           <TabsTrigger value="classify">{t('variables.tabs.classify')}</TabsTrigger>
+          <TabsTrigger value="cards">{t('variables.tabs.cards')}</TabsTrigger>
         </TabsList>
 
       <TabsContent value="build" className="space-y-6">
@@ -371,36 +400,6 @@ export function VariablesView() {
           )}
         </CardContent>
       </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">{t('variables.batch.title')}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-1">
-            <Label htmlFor="batch-variable-select">{t('variables.field.variable')}</Label>
-            <Select value={batchVar} onValueChange={setBatchVar} disabled={variables.length === 0}>
-              <SelectTrigger id="batch-variable-select"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {variables.map(v => <SelectItem key={v.name} value={v.name}>{v.name}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1">
-            <Label htmlFor="batch-values-textarea">{t('variables.batch.valuesLabel')}</Label>
-            <Textarea
-              id="batch-values-textarea"
-              rows={5}
-              placeholder={"42:4\\n17:2\\n58:5"}
-              value={batchValues}
-              onChange={e => setBatchValues(e.target.value)}
-            />
-          </div>
-          <Button onClick={handleBatchSet} disabled={batchBusy || !batchVar || !batchValues}>
-            variable-set
-          </Button>
-        </CardContent>
-      </Card>
       </TabsContent>
 
       <TabsContent value="classify">
@@ -427,7 +426,89 @@ export function VariablesView() {
         </CardContent>
       </Card>
       </TabsContent>
+
+      <TabsContent value="cards">
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">{t('variables.cards.title')}</CardTitle>
+            <CardDescription>{t('variables.cards.description')}</CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" onClick={loadCards} disabled={cardsLoading}>
+            {t('common.refresh')}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {variables.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('variables.cards.noVariables')}</p>
+          ) : cardsLoading && cardImages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          ) : cardImages.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t('variables.cards.empty')}</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {cardImages.map(img => (
+                <div key={img.id} className="border rounded-md overflow-hidden bg-card shadow-sm">
+                  <div className="relative aspect-[4/3] bg-muted">
+                    {cardThumbnails[img.id] ? (
+                      <img
+                        src={cardThumbnails[img.id]}
+                        className="w-full h-full object-cover cursor-zoom-in"
+                        onClick={() => openLightbox(cardThumbnails[img.id], img.file_path)}
+                      />
+                    ) : (
+                      <Skeleton className="w-full h-full rounded-none" />
+                    )}
+                    <button
+                      type="button"
+                      title={t('photoDetails.viewDetails')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCardsDetailsImageId(img.id);
+                      }}
+                      className="absolute top-1 right-1 w-6 h-6 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
+                    >
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    <div className="truncate text-sm font-medium" title={img.file_path}>
+                      {img.file_path.split(/[\\/]/).pop()}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {variables.map(v => {
+                        const value = img.values[v.name];
+                        return (
+                          <span
+                            key={v.name}
+                            className={
+                              value == null
+                                ? 'text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground'
+                                : 'text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary'
+                            }
+                            title={v.name}
+                          >
+                            {v.name}: {value == null ? '—' : getOptionLabel(v, value)}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      </TabsContent>
       </Tabs>
+
+      <PhotoDetailsDrawer
+        dbPath={project.dbPath}
+        imageId={cardsDetailsImageId}
+        open={cardsDetailsImageId !== null}
+        onOpenChange={(open) => !open && setCardsDetailsImageId(null)}
+      />
     </div>
   );
 }

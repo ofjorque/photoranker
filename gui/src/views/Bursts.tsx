@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { Layers, Undo2, Ban, Info } from 'lucide-react';
 import { Html } from '@/components/Html';
 import { PhotoDetailsDrawer } from '@/components/PhotoDetailsDrawer';
@@ -124,6 +125,21 @@ export function BurstsView() {
     }
   };
 
+  const handleNotABurst = async () => {
+    if (!pendingBurst) return;
+    try {
+      const result = await cli.burstExclude(
+        project!.dbPath,
+        pendingBurst.id,
+        pendingBurst.images.map(img => img.id),
+      );
+      showToast(t('bursts.notABurst.dissolved', { id: result.burst_id }));
+      await loadData();
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    }
+  };
+
   const handleRankingSubmit = async (ranking: Array<[number, number]>) => {
     try {
       const result = await cli.burstTournament(project.dbPath, pendingBurst.id, ranking);
@@ -166,6 +182,15 @@ export function BurstsView() {
         </div>
       </div>
 
+      {pendingBurst.images.length === 2 && (
+        <div className="px-6 shrink-0 pb-4 flex justify-end">
+          <Button variant="outline" size="sm" onClick={handleNotABurst}>
+            <Ban className="w-4 h-4 mr-2" />
+            {t('bursts.notABurst.button')}
+          </Button>
+        </div>
+      )}
+
       {pendingBurst.images.length > 2 && (
         <div className="px-6 shrink-0 pb-4">
           <Card>
@@ -175,30 +200,42 @@ export function BurstsView() {
             <CardContent className="px-4 pb-3 flex flex-col sm:flex-row items-end gap-4">
               <div className="flex-1 flex gap-2 overflow-x-auto pb-2">
                 {pendingBurst.images.map(img => (
-                  <label key={img.id} className="shrink-0 flex flex-col gap-2 cursor-pointer w-24">
-                    <div className="relative aspect-[3/2] bg-muted overflow-hidden rounded border">
-                      {thumbnails[img.id] && <img src={thumbnails[img.id]} className="w-full h-full object-cover" />}
-                      <button
-                        type="button"
-                        title={t('photoDetails.viewDetails')}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDetailsImageId(img.id);
-                        }}
-                        className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Checkbox 
-                        checked={excludedIds.has(img.id)} 
-                        onCheckedChange={(c) => toggleExclude(img.id, !!c)} 
-                      />
-                      <span className="text-xs">{t('bursts.exclude.notBurst')}</span>
-                    </div>
-                  </label>
+                  <ContextMenu key={img.id}>
+                    <ContextMenuTrigger asChild>
+                      <label className="shrink-0 flex flex-col gap-2 cursor-pointer w-24">
+                        <div className="relative aspect-[3/2] bg-muted overflow-hidden rounded border">
+                          {thumbnails[img.id] && <img src={thumbnails[img.id]} className="w-full h-full object-cover" />}
+                          <button
+                            type="button"
+                            title={t('photoDetails.viewDetails')}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setDetailsImageId(img.id);
+                            }}
+                            className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full bg-background/80 text-foreground hover:bg-background"
+                          >
+                            <Info className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            checked={excludedIds.has(img.id)}
+                            onCheckedChange={(c) => toggleExclude(img.id, !!c)}
+                          />
+                          <span className="text-xs">{t('bursts.exclude.notBurst')}</span>
+                        </div>
+                      </label>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onClick={() => setDetailsImageId(img.id)}>
+                        {t('photoDetails.viewDetails')}
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => toggleExclude(img.id, !excludedIds.has(img.id))}>
+                        {excludedIds.has(img.id) ? t('bursts.exclude.contextMenu.undo') : t('bursts.exclude.notBurst')}
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                 ))}
               </div>
               <Button onClick={handleExcludeSubmit} variant="secondary" className="mb-2 shrink-0">
