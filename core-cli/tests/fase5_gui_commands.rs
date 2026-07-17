@@ -127,6 +127,38 @@ fn get_thumbnail_and_quality_metrics_happy_path() {
     );
     assert!(metrics["data"]["metrics"]["sharpness"].is_number());
     assert_eq!(metrics["data"]["metrics"]["orientation"], "square");
+
+    let preview = run_cli(&["get-preview", "--image-id", &id_arg, "--db", &db_arg]);
+    assert_eq!(preview["status"], "ok", "get-preview falló: {preview}");
+    let preview_b64 = preview["data"]["preview_b64"]
+        .as_str()
+        .expect("preview_b64 debe ser string");
+    assert!(!preview_b64.is_empty());
+    let preview_decoded = base64::engine::general_purpose::STANDARD
+        .decode(preview_b64)
+        .expect("preview_b64 debe ser base64 válido");
+    assert_eq!(
+        &preview_decoded[0..2],
+        &[0xFF, 0xD8],
+        "debe ser un JPEG (SOI marker)"
+    );
+}
+
+#[test]
+fn get_preview_reports_image_not_found() {
+    let tmp = TempDir::new("fase5_preview_not_found");
+    let folder = &tmp.0;
+    write_solid_jpeg(&folder.join("a.jpg"), 128);
+
+    let db_path = folder.join(".photoranker.sqlite");
+    let db_arg = db_path.to_string_lossy().to_string();
+    let path_arg = folder.to_string_lossy().to_string();
+
+    run_cli(&["init", "--path", &path_arg]);
+
+    let missing = run_cli(&["get-preview", "--image-id", "999999", "--db", &db_arg]);
+    assert_eq!(missing["status"], "error");
+    assert_eq!(missing["code"], "IMAGE_NOT_FOUND");
 }
 
 #[test]

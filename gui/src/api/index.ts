@@ -18,6 +18,7 @@ import type {
   FailedThumbnail,
   GetQualityMetricsResult,
   GetThumbnailResult,
+  GetPreviewResult,
   InitResult,
   PendingBurst,
   PruneResult,
@@ -223,6 +224,9 @@ export const cli = {
 
   getThumbnail: (dbPath: string, imageId: number) =>
     callCli<GetThumbnailResult>(['get-thumbnail', '--image-id', String(imageId), ...dbArgs(dbPath)]),
+
+  getPreview: (dbPath: string, imageId: number) =>
+    callCli<GetPreviewResult>(['get-preview', '--image-id', String(imageId), ...dbArgs(dbPath)]),
 
   getQualityMetrics: (dbPath: string, imageId: number) =>
     callCli<GetQualityMetricsResult>([

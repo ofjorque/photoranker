@@ -153,6 +153,45 @@ pub fn get_thumbnail(conn: &Connection, image_id: i64) -> AppResult<Value> {
     }))
 }
 
+/// `get-preview --image-id <id>`: re-decodifica el archivo original al vuelo
+/// a `preview_zoom_size` (más grande que `preview_size`, ver config.md) para
+/// el zoom del Lightbox de la GUI — el `thumbnail` guardado en DB se queda en
+/// `preview_size` para no inflar cada `.photoranker.sqlite`. Solo lectura, sin
+/// backup, no toca `thumbnail`/`thumbnail_status`: si la extracción falla acá
+/// no se marca la imagen como fallida, ya que `get-thumbnail`/`init` ya
+/// resolvieron esa extracción con éxito antes.
+pub fn get_preview(conn: &Connection, cfg: &Config, image_id: i64) -> AppResult<Value> {
+    let file_path: Option<String> = conn
+        .query_row(
+            "SELECT file_path FROM images WHERE id = ?1",
+            params![image_id],
+            |r| r.get(0),
+        )
+        .optional()?;
+    let Some(file_path) = file_path else {
+        return Err(AppError::ImageNotFound(image_id));
+    };
+
+    let path = Path::new(&file_path);
+    let exif_data = exif::read(path);
+    let Ok(img) = thumbnail::extract_normalized(path, &exif_data, cfg.preview_zoom_size) else {
+        return Err(AppError::ThumbnailFailed(image_id));
+    };
+
+    let mut buf = Vec::new();
+    if img
+        .write_to(&mut Cursor::new(&mut buf), image::ImageFormat::Jpeg)
+        .is_err()
+    {
+        return Err(AppError::ThumbnailFailed(image_id));
+    }
+
+    Ok(json!({
+        "id": image_id,
+        "preview_b64": base64::engine::general_purpose::STANDARD.encode(buf),
+    }))
+}
+
 /// `get-quality-metrics --image-id <id>`: expone `image_quality_metrics`
 /// para el panel de referencia de calidad de la GUI (ver fase1-ingesta.md
 /// sección 2, fase5-gui.md checklist). Solo lectura, sin backup.

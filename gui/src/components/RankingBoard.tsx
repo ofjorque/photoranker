@@ -151,7 +151,7 @@ export function RankingBoard({ dbPath, images, onSubmit, captionFor, onFocusChan
                         className="w-full h-full object-contain cursor-zoom-in"
                         onClick={(e) => {
                           e.stopPropagation();
-                          openLightbox(thumb, name);
+                          openLightbox(thumb, name, { dbPath, imageId: img.id });
                         }}
                       />
                     ) : (
@@ -181,7 +181,10 @@ export function RankingBoard({ dbPath, images, onSubmit, captionFor, onFocusChan
                 <ContextMenuItem onClick={() => setFocusedIndex(idx)}>
                   {t('rankingBoard.contextMenu.focus')}
                 </ContextMenuItem>
-                <ContextMenuItem disabled={!thumb} onClick={() => thumb && openLightbox(thumb, name)}>
+                <ContextMenuItem
+                  disabled={!thumb}
+                  onClick={() => thumb && openLightbox(thumb, name, { dbPath, imageId: img.id })}
+                >
                   {t('rankingBoard.contextMenu.viewLarge')}
                 </ContextMenuItem>
                 <ContextMenuSeparator />

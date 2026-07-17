@@ -262,6 +262,15 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Re-decodifica el archivo original a `preview_zoom_size` (JPEG, base64)
+    /// para el zoom del Lightbox — no toca el `thumbnail` guardado en DB.
+    #[command(name = "get-preview")]
+    GetPreview {
+        #[arg(long = "image-id")]
+        image_id: i64,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Devuelve las métricas objetivas de calidad de una imagen (panel de
     /// referencia de la GUI, ver docs/fase1-ingesta.md sección 2).
     #[command(name = "get-quality-metrics")]
@@ -533,6 +542,12 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let conn = db::open_local(&db_path)?;
             commands::thumbnails::get_thumbnail(&conn, image_id)
+        }
+        Commands::GetPreview { image_id, db } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let conn = db::open_local(&db_path)?;
+            commands::thumbnails::get_preview(&conn, &cfg, image_id)
         }
         Commands::GetQualityMetrics { image_id, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;

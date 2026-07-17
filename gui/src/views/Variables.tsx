@@ -458,7 +458,7 @@ export function VariablesView() {
                   src={classifyThumb}
                   alt={name}
                   className="w-full h-full object-cover cursor-zoom-in"
-                  onClick={() => openLightbox(classifyThumb, name)}
+                  onClick={() => openLightbox(classifyThumb, name, { dbPath: project.dbPath, imageId: entry.id })}
                 />
               ) : (
                 <span className="text-muted-foreground text-sm">{t('common.loading')}</span>
@@ -632,7 +632,7 @@ export function VariablesView() {
                       <img
                         src={cardThumbnails[img.id]}
                         className="w-full h-full object-cover cursor-zoom-in"
-                        onClick={() => openLightbox(cardThumbnails[img.id], img.file_path)}
+                        onClick={() => openLightbox(cardThumbnails[img.id], img.file_path, { dbPath: project.dbPath, imageId: img.id })}
                       />
                     ) : (
                       <Skeleton className="w-full h-full rounded-none" />

@@ -274,7 +274,7 @@ export function ClusterView() {
                               <img
                                 src={thumbnails[img.id]}
                                 className="w-full h-full object-cover cursor-zoom-in"
-                                onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                                onClick={() => openLightbox(thumbnails[img.id], img.file_path, { dbPath: project.dbPath, imageId: img.id })}
                               />
                             ) : (
                               <Skeleton className="w-full h-full rounded-none" />
@@ -295,7 +295,7 @@ export function ClusterView() {
                         <ContextMenuContent>
                           <ContextMenuItem
                             disabled={!thumbnails[img.id]}
-                            onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                            onClick={() => openLightbox(thumbnails[img.id], img.file_path, { dbPath: project.dbPath, imageId: img.id })}
                           >
                             {t('rankingBoard.contextMenu.viewLarge')}
                           </ContextMenuItem>
@@ -350,7 +350,7 @@ export function ClusterView() {
                             <img
                               src={thumbnails[img.id]}
                               className="w-full h-full object-cover cursor-zoom-in"
-                              onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                              onClick={() => openLightbox(thumbnails[img.id], img.file_path, { dbPath: project.dbPath, imageId: img.id })}
                             />
                           ) : (
                             <Skeleton className="w-full h-full rounded-none" />
@@ -380,7 +380,7 @@ export function ClusterView() {
                     <ContextMenuContent>
                       <ContextMenuItem
                         disabled={!thumbnails[img.id]}
-                        onClick={() => openLightbox(thumbnails[img.id], img.file_path)}
+                        onClick={() => openLightbox(thumbnails[img.id], img.file_path, { dbPath: project.dbPath, imageId: img.id })}
                       >
                         {t('rankingBoard.contextMenu.viewLarge')}
                       </ContextMenuItem>

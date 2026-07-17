@@ -183,6 +183,11 @@ export interface GetThumbnailResult {
   thumbnail_b64: string;
 }
 
+export interface GetPreviewResult {
+  id: number;
+  preview_b64: string;
+}
+
 export interface BurstImage {
   id: number;
   file_path: string;

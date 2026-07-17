@@ -31,6 +31,35 @@ export async function getThumbnailDataUrl(
   }
 }
 
+const previewCache = new Map<string, string | null>();
+
+/**
+ * Igual que `getThumbnailDataUrl` pero pide `get-preview` (re-decodifica el
+ * archivo original a `preview_zoom_size`, más grande) — usada solo por el
+ * Lightbox al hacer zoom, nunca en grillas/listas.
+ */
+export async function getPreviewDataUrl(
+  dbPath: string,
+  imageId: number,
+): Promise<string | null> {
+  const k = key(dbPath, imageId);
+  if (previewCache.has(k)) return previewCache.get(k)!;
+
+  try {
+    const result = await cli.getPreview(dbPath, imageId);
+    const url = `data:image/jpeg;base64,${result.preview_b64}`;
+    previewCache.set(k, url);
+    return url;
+  } catch (e) {
+    if (e instanceof CliError) {
+      previewCache.set(k, null);
+      return null;
+    }
+    throw e;
+  }
+}
+
 export function clearThumbnailCache(): void {
   cache.clear();
+  previewCache.clear();
 }

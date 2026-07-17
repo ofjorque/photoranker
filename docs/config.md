@@ -15,6 +15,7 @@ global_sync_every = 10         # cada cuántos resultados de grupo se hace upser
 cluster_min = 2               # rango mínimo de k para clustMD --preview — ver fase2-clustering.md
 cluster_max = 10               # rango máximo de k para clustMD --preview
 preview_size = 512            # resolución máxima (lado mayor) de la miniatura normalizada — ver fase1-ingesta.md
+preview_zoom_size = 2048      # resolución máxima (lado mayor) del preview decodificado bajo demanda para get-preview (zoom del Lightbox en la GUI) — ver fase5-gui.md
 trueskill_beta = 4.1667      # beta de TrueSkillConfig, inyectado explícitamente (no el default silencioso del crate) — ver fase3-torneo.md (migrado desde weng_lin_beta)
 min_global_sample = 20        # mínimo de imágenes en el índice global para usar cuantiles en vez del mapeo fijo de mu — ver fase4-exportacion.md
 variable_null_threshold = 0.20 # si una variable personalizada tiene >20% de NULL entre imágenes activas, se excluye del clustering

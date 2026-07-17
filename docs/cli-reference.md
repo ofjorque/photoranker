@@ -126,6 +126,9 @@ photoranker resync-global --path "D:\Fotos\Boda_Juan"
 # Miniatura normalizada en base64 (único punto por el que la GUI recibe bytes de imagen)
 photoranker get-thumbnail --image-id 42
 
+# Re-decodifica el archivo original a preview_zoom_size (más grande que preview_size) para el zoom del Lightbox
+photoranker get-preview --image-id 42
+
 # Métricas objetivas de calidad de una imagen (panel de referencia de la GUI)
 photoranker get-quality-metrics --image-id 42
 
