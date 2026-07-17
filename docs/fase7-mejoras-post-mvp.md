@@ -85,4 +85,4 @@ Sin comando nuevo, para la cantidad típica de variables custom de una carpeta: 
 
 ## Siguiente fase
 
-Ninguna planeada todavía — actualizar este documento (o agregar `fase8-*.md`) cuando surja la próxima ronda de feedback de uso real.
+`fase8-mejoras-avanzadas.md` — a diferencia de esta fase (envoltura visual pura), toca backend/arquitectura real; los 4 ítems que trae vienen liberados de `fase6-fuera-de-alcance.md` y todavía no tienen dirección de diseño definida.

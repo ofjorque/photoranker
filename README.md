@@ -47,6 +47,7 @@ Este README es solo la puerta de entrada. La especificación completa vive en `d
 - [`docs/fase5-gui.md`](docs/fase5-gui.md) — GUI Tauri
 - [`docs/fase6-fuera-de-alcance.md`](docs/fase6-fuera-de-alcance.md) — explícitamente fuera del MVP
 - [`docs/fase7-mejoras-post-mvp.md`](docs/fase7-mejoras-post-mvp.md) — mejoras de UX/GUI post-MVP, sí implementables
+- [`docs/fase8-mejoras-avanzadas.md`](docs/fase8-mejoras-avanzadas.md) — mejoras de arquitectura liberadas de fase 6, pendientes de definición
 
 **Nota para Claude Code / IA implementadora**: lee `docs/conventions.md` completo antes de escribir código de cualquier fase — es la "constitución" del proyecto. Luego, para cada fase, lee su archivo `docs/faseN-*.md` junto con `docs/database.md` y `docs/config.md` (referenciados desde cada fase según lo que necesite).
 
