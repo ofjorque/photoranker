@@ -153,7 +153,7 @@ El MVP se considera terminado cuando **todo el flujo funciona desde el CLI**, si
 
 ✅ `init` (incremental) · ✅ `burst-detect` + `burst-tournament` · ✅ `cluster` (`--preview`/`--k`) · ✅ `variable-create`/`variable-set`/`variable-tag` · ✅ `tournament-next`/`tournament-result`/`tournament-status` · ✅ `export-xmp`
 
-La GUI (`fase5-gui.md`) es la envoltura visual de lo anterior — no agrega lógica nueva, y puede ser mínima en su primera versión. Todo lo listado en `fase6-fuera-de-alcance.md` (multiplataforma, i18n, duplicados, etc.) queda explícitamente fuera del MVP.
+La GUI (`fase5-gui.md`) es la envoltura visual de lo anterior — no agrega lógica nueva, y puede ser mínima en su primera versión. Todo lo listado en `fase6-fuera-de-alcance.md` (multiplataforma, duplicados, etc.) queda explícitamente fuera del MVP. La internacionalización de la GUI (español/inglés) sí está en alcance — ver `fase5-gui.md`, "Internacionalización (i18n)".
 
 ## Ver también
 

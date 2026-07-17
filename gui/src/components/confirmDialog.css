@@ -11,7 +11,11 @@
 }
 
 .confirm-panel {
-  background: var(--color-surface);
+  /* Vidrio esmerilado — flota sobre el resto de la app (a veces sobre
+     fotos), ver dark.css/light.css --glass-bg/--glass-blur y THEME.md. */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);

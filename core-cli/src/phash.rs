@@ -19,9 +19,24 @@ pub fn compute(img: &DynamicImage) -> String {
     let bridged = img_hash::image::RgbaImage::from_raw(width, height, rgba.into_raw())
         .expect("el buffer RGBA tiene el tamaño exacto width*height*4");
 
+    // `HashAlg::Gradient`, no `Mean`: con `preproc_dct()`, `Mean` compara
+    // cada uno de los 64 coeficientes DCT de baja frecuencia contra el
+    // PROMEDIO de los 64 — pero el coeficiente DC (posición [0][0], brillo
+    // general) es siempre mucho más grande que los otros 63 (detalle/
+    // contraste), así que arrastra el promedio hacia arriba y casi todos los
+    // demás bits terminan en 0 sin importar el contenido real de la imagen
+    // (verificado empíricamente: fotos completamente distintas colapsaban a
+    // hashes de 2-16 bits en 1 sobre 64, cuando deberían rondar ~32, y caían
+    // por error dentro de burst_threshold). Los hashers de pHash de
+    // referencia excluyen el término DC exactamente por esto; el crate
+    // `img_hash` 3.2.0 no lo hace para `Mean`. `Gradient` compara
+    // coeficientes ADYACENTES entre sí en vez de contra un promedio global,
+    // así que un DC atípicamente grande solo afecta una comparación, no las
+    // 64 — mismo tamaño de hash (64 bits, hash_size(8,8) sigue siendo válido
+    // como límite de HASH_BITS), sigue basado en DCT.
     let hasher = HasherConfig::new()
         .hash_size(8, 8)
-        .hash_alg(HashAlg::Mean)
+        .hash_alg(HashAlg::Gradient)
         .preproc_dct()
         .to_hasher();
     let hash = hasher.hash_image(&bridged);

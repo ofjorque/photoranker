@@ -1,0 +1,286 @@
+// Diccionario español (default) — ver docs/fase5-gui.md, "Internacionalización
+// (i18n)". Claves `<vista_o_componente>.<área>.<elemento>`, namespace
+// `common.*` para strings reusados entre vistas. Mismo conjunto de claves
+// que en.ts (ver chequeo de consistencia en dev, i18n/index.ts).
+export const es: Record<string, string> = {
+  // common
+  'common.cancel': 'Cancelar',
+  'common.confirm': 'Confirmar',
+  'common.close': 'Cerrar',
+
+  // components/LoadingOverlay
+  'loadingOverlay.cancelling': 'Cancelando…',
+  'loadingOverlay.done': 'Listo',
+
+  // main.ts — nav
+  'main.nav.home': '1. Cargar',
+  'main.nav.bursts': '2. Ráfagas',
+  'main.nav.variables': '3. Variables',
+  'main.nav.cluster': '4. Clustering',
+  'main.nav.tournament': '5. Torneo',
+  'main.nav.export': '6. Exportación',
+  'main.nav.settings': 'Ajustes',
+  'main.nav.toggleCollapse': 'Colapsar/expandir menú',
+  'main.nav.noProject': 'Ningún proyecto abierto',
+
+  // common (siguen)
+  'common.save': 'Guardar',
+
+  // views/Settings
+  'settings.title': 'Ajustes',
+  'settings.appearance.title': 'Apariencia',
+  'settings.appearance.description':
+    'Los cambios se ven al instante; "Guardar" los deja persistidos para la próxima vez que abras la app.',
+  'settings.appearance.baseTheme': 'Tema base',
+  'settings.appearance.dark': 'Oscuro',
+  'settings.appearance.light': 'Claro',
+  'settings.appearance.accentColor': 'Color de acento',
+  'settings.appearance.reset': 'Restablecer',
+  'settings.appearance.customThemeNotice':
+    'Ya tenés un archivo de tema personalizado en <code>{path}</code>. Guardar acá lo va a reemplazar por el generado desde esta pantalla.',
+  'settings.appearance.replaceCustomTitle': 'Reemplazar tema personalizado',
+  'settings.appearance.replaceCustomMessage':
+    'Ya tenés un archivo de tema en "{path}" que no fue generado por esta pantalla. Guardar acá lo va a reemplazar.',
+  'settings.appearance.replaceCustomConfirm': 'Reemplazar y guardar',
+  'settings.appearance.accentWarning':
+    'Este acento queda muy parecido al rojo de "peligro" (usado en botones destructivos, como reiniciar el torneo o vaciar el índice global) — te va a costar distinguirlos a simple vista.',
+  'settings.appearance.saved': 'Ajustes guardados',
+  'settings.language.title': 'Idioma',
+  'settings.language.description': 'Cambia el idioma de toda la interfaz al instante.',
+  'settings.language.label': 'Idioma de la interfaz',
+  'settings.language.spanish': 'Español',
+  'settings.language.english': 'Inglés',
+
+  // components/QualityPanel
+  'qualityPanel.loading': 'Cargando métricas…',
+  'qualityPanel.loadError': 'No se pudieron leer las métricas de calidad.',
+  'qualityPanel.noMetrics':
+    'Sin métricas de calidad (la miniatura de esta imagen falló, ver <code>list-failed-thumbnails</code>).',
+  'qualityPanel.meterAriaLabel': '{value} de {max}',
+  'qualityPanel.metric.sharpness': 'Nitidez (sharpness)',
+  'qualityPanel.metric.brightness': 'Brillo',
+  'qualityPanel.metric.contrast': 'Contraste',
+  'qualityPanel.metric.overexposed': 'Sobreexposición',
+  'qualityPanel.metric.underexposed': 'Subexposición',
+  'qualityPanel.metric.saturation': 'Saturación',
+  'qualityPanel.metric.colorfulness': 'Colorido (colorfulness)',
+  'qualityPanel.metric.entropy': 'Entropía',
+  'qualityPanel.metric.averageColor': 'Color promedio',
+  'qualityPanel.metric.orientation': 'Orientación',
+  'qualityPanel.warn.sharpness': 'Varianza del Laplaciano baja: posible foto desenfocada',
+  'qualityPanel.warn.overexposed': 'Más del 5% de píxeles con clipping por sobreexposición',
+  'qualityPanel.warn.underexposed': 'Más del 5% de píxeles con clipping por subexposición',
+
+  // components/ScreePlot
+  'screePlot.noData': 'Sin datos de BIC para graficar.',
+  'screePlot.ariaLabel': 'Scree plot de BIC por número de clusters',
+  'screePlot.xAxis': 'k (número de clusters)',
+  'screePlot.yAxis': 'BIC (mayor = mejor ajuste)',
+  'screePlot.caption':
+    'Mejor ajuste: <strong style="color:var(--color-success)">k = {bestK}</strong> (fallback automático de <code>cluster</code> sin <code>--k</code>).',
+
+  // components/Lightbox
+  'lightbox.hint': 'Rueda del mouse o +/- para zoom · arrastrar para mover · Esc para cerrar',
+  'lightbox.closeTitle': 'Cerrar (Esc)',
+  'lightbox.zoomOut': 'Alejar',
+  'lightbox.zoomReset': 'Restablecer zoom (1:1)',
+  'lightbox.zoomIn': 'Acercar',
+
+  // common (siguen)
+  'common.openProjectFirst': 'Abrí un proyecto primero.',
+  'common.loading': 'Cargando…',
+  'common.refresh': 'Actualizar',
+  'common.noThumbnail': 'Sin miniatura',
+
+  // views/Tournament
+  'tournament.loadingStatus': 'Cargando estado del torneo…',
+  'tournament.status.title': 'Progreso del torneo',
+  'tournament.status.active': 'Activas',
+  'tournament.status.converged': 'Convergidas',
+  'tournament.status.stalled': 'Estancadas',
+  'tournament.status.rounds': 'Rondas',
+  'tournament.status.convergencePct': '% Convergencia',
+  'tournament.status.state': 'Estado',
+  'tournament.status.loadError': 'No se pudo leer tournament-status.',
+  'tournament.noGroup': 'No hay grupo disponible (menos de 2 imágenes activas, o el torneo ya convergió).',
+  'tournament.groupHeading': 'Grupo {groupId}…',
+  'tournament.quality.toggleTitle': 'Colapsar/expandir panel de calidad',
+  'tournament.quality.title': 'Panel de calidad',
+  'tournament.quality.focusHint': 'Enfocá una imagen…',
+  'tournament.resultSent': 'Resultado enviado',
+
+  // views/Export
+  'export.phase.reading': 'Leyendo ranking y clusters…',
+  'export.phase.stars': 'Calculando estrellas (percentiles del índice global)…',
+  'export.phase.writing': 'Escribiendo sidecars .xmp…',
+  'export.title': 'Ranking &amp; Exportación',
+  'export.liveRanking.title': 'Ranking en vivo',
+  'export.liveRanking.empty': 'Sin imágenes activas.',
+  'export.liveRanking.colFile': 'Archivo',
+  'export.liveRanking.colState': 'Estado',
+  'export.liveRanking.active': 'activa',
+  'export.failedThumbnails.title': 'Miniaturas fallidas',
+  'export.failedThumbnails.empty': 'Ninguna — todas las miniaturas se extrajeron bien.',
+  'export.failedThumbnails.retried': 'Imagen {id}: miniatura recuperada',
+  'export.xmp.title': 'Exportar a XMP',
+  'export.xmp.description':
+    'Escribe sidecars <code>.xmp</code> junto a cada foto (convención Darktable), de forma no destructiva.',
+  'export.xmp.loadingTitle': 'Exportando a XMP…',
+  'export.xmp.result':
+    '{written} sidecars .xmp escritos ({failedThumbnail} excluidas por miniatura fallida, {missing} excluidas por faltantes).',
+
+  // views/Bursts
+  'bursts.resolved.empty': 'Todavía no resolviste ningún minitorneo de ráfaga.',
+  'bursts.resolved.row': 'Ráfaga #{id} — ganadora: imagen {representativeId} ({count} fotos)',
+  'bursts.resolved.undo': 'Deshacer',
+  'bursts.resolved.undone': 'Ráfaga #{id} deshecha — vuelve a estar pendiente',
+  'bursts.loadingPending': 'Cargando ráfagas pendientes…',
+  'bursts.title': 'Ráfagas',
+  'bursts.noPending':
+    'No hay ráfagas pendientes de minitorneo. Corré <code>burst-detect</code> en la pantalla de Proyecto si agregaste fotos nuevas.',
+  'bursts.heading': 'Ráfaga #{id}',
+  'bursts.pending.one': 'pendiente',
+  'bursts.pending.other': 'pendientes',
+  'bursts.instructions':
+    'Ordená de mejor a peor con el teclado. La ganadora (posición 1) se conserva; el resto queda marcado como <code>rejected</code>.',
+  'bursts.exclude.question': '¿Alguna de estas fotos no es parte de la ráfaga?',
+  'bursts.exclude.notBurst': 'no es burst',
+  'bursts.exclude.button': 'Excluir seleccionadas',
+  'bursts.exclude.needSelection': 'Seleccioná al menos una foto para excluir',
+  'bursts.exclude.dissolved': 'Ráfaga #{id} disuelta (quedaba solo 1 imagen)',
+  'bursts.exclude.excluded': '{count} imagen(es) excluida(s) de la ráfaga #{id}',
+  'bursts.tournamentResult': 'Burst #{id}: ganadora {representativeId}, {rejected} rechazadas',
+  'bursts.resolved.title': 'Bursts ya resueltos (deshacer)',
+  'bursts.resolved.toggle': 'mostrar/ocultar',
+
+  // views/Cluster
+  'cluster.phase.invokingRscript': 'Invocando Rscript…',
+  'cluster.phase.fittingEachK': 'Ajustando clustMD para cada k…',
+  'cluster.phase.testingCovariance': 'Probando modelos de covarianza (EII/VII/EEI/VEI)…',
+  'cluster.phase.computingBic': 'Calculando BIC…',
+  'cluster.phase.fittingMixture': 'Ajustando el modelo de mezcla (EM)…',
+  'cluster.phase.assigning': 'Asignando cada imagen a su cluster…',
+  'cluster.phase.saving': 'Guardando resultados…',
+  'cluster.list.loading': 'Cargando clusters…',
+  'cluster.list.empty': 'Todavía no hay clusters comprometidos — corré <code>cluster --k</code> arriba.',
+  'cluster.card.unnamed': 'Cluster {id}',
+  'cluster.card.photoCount': '{count} fotos',
+  'cluster.card.namePlaceholder': 'Nombre del cluster',
+  'cluster.card.rename': 'Renombrar',
+  'cluster.card.nameRequired': 'El nombre no puede estar vacío',
+  'cluster.card.renamed': 'Cluster {id} renombrado a "{name}"',
+  'cluster.title': 'Clustering (clustMD)',
+  'cluster.preview.title': 'Vista previa (BIC por k)',
+  'cluster.commit.title': 'Comprometer clustering',
+  'cluster.commit.kLabel': 'k (vacío = automático, mejor BIC)',
+  'cluster.list.title': 'Clusters — fotos representativas para elegir el nombre',
+  'cluster.probThreshold.label': 'Umbral mínimo de probabilidad de pertenencia (0 = deshabilitado)',
+  'cluster.runningLoadingTitle': 'Corriendo clustMD (R)…',
+  'cluster.commit.doneFromCache': 'Clustering comprometido (modelo reutilizado de la caché)',
+  'cluster.commit.done': 'Clustering comprometido',
+
+  // components/RankingBoard
+  'rankingBoard.hint.controls':
+    '<kbd>&larr;&rarr;</kbd>/<kbd>Tab</kbd> mover foco · <kbd>1</kbd>-<kbd>{count}</kbd> asignar posición · <kbd>Enter</kbd> confirmar · <kbd>Backspace</kbd>/<kbd>R</kbd> reiniciar',
+  'rankingBoard.confirm': 'Confirmar (Enter)',
+  'rankingBoard.badge.tied': 'Empate en posición {pos}',
+  'rankingBoard.badge.position': 'Posición {pos}',
+  'rankingBoard.missing': 'Faltan {count} imagen(es) por ordenar',
+
+  // views/Home
+  'home.init.phase.scanning': 'Escaneando la carpeta…',
+  'home.init.phase.thumbnails': 'Extrayendo miniaturas…',
+  'home.init.phase.phash': 'Calculando pHash…',
+  'home.init.phase.quality': 'Calculando métricas de calidad…',
+  'home.init.phase.pairing': 'Emparejando RAW+JPEG del mismo disparo…',
+  'home.title': 'Proyecto',
+  'home.folder.label': 'Carpeta de fotos',
+  'home.folder.placeholder': 'C:\\Fotos\\Boda_Juan',
+  'home.folder.pick': 'Elegir…',
+  'home.init.button': 'Inicializar / Actualizar (init)',
+  'home.actions.heading': 'Acciones sobre <span class="mono">{folderPath}</span>',
+  'home.actions.gotoBursts': 'Ir a ráfagas &rarr;',
+  'home.actions.gotoTournament': 'Ir a torneo &rarr;',
+  'home.dangerZone.title': 'Deshacer / reiniciar torneo',
+  'home.dangerZone.description':
+    'Por si te equivocaste al mandar un grupo, o querés volver a empezar el torneo de esta carpeta desde cero.',
+  'home.dangerZone.undo': 'tournament-undo (deshacer último grupo)',
+  'home.dangerZone.reset': 'tournament-reset (reiniciar esta carpeta)',
+  'home.globalIndex.title': 'Índice global',
+  'home.globalIndex.description':
+    'Operaciones sobre <code>global_index.sqlite</code> — afectan a <strong>todas</strong> tus carpetas. Úsalas solo si sabés lo que hacen.',
+  'home.globalIndex.resyncTitle': 'Repara las rutas en el índice si moviste esta carpeta',
+  'home.globalIndex.resetTitle': 'Vacía el índice global completo',
+  'home.folder.needFolder': 'Elegí una carpeta primero',
+  'home.init.loadingTitle': 'Inicializando carpeta…',
+  'home.init.pairedNote': ', {count} pares RAW+JPEG fusionados',
+  'home.init.result': 'init: {ok} nuevas, {existing} ya existentes, {failed} fallidas{pairedNote}',
+  'home.init.cancelled': 'init cancelado',
+  'home.busyRunning': 'Corriendo…',
+  'home.prune.result': 'prune: {count} marcadas como missing',
+  'home.burstDetect.result': 'burst-detect: {count} ráfagas creadas',
+  'home.undo.busy': 'Deshaciendo…',
+  'home.undo.result': 'Deshecho: grupo {groupId}… ({count} imágenes)',
+  'home.resetTournament.confirmTitle': 'Reiniciar torneo',
+  'home.resetTournament.confirmMessage':
+    '¿Reiniciar el torneo de "{folderPath}"? mu/sigma vuelven al default en todas las imágenes activas. No afecta las decisiones de ráfaga (rejected).',
+  'home.resetTournament.confirmLabel': 'Reiniciar',
+  'home.resetTournament.busy': 'Reiniciando…',
+  'home.resetTournament.result': 'tournament-reset: {count} imágenes reiniciadas',
+  'home.resetGlobal.confirmTitle': 'Vaciar índice global',
+  'home.resetGlobal.confirmMessage':
+    'Afecta el cálculo de estrellas de TODAS tus carpetas hasta que vuelvan a sincronizarse. Esta acción no se puede deshacer.',
+  'home.resetGlobal.confirmLabel': 'Vaciar todo',
+  'home.resetGlobal.busy': 'Vaciando…',
+  'home.resetGlobal.result': 'reset-global-index: {count} filas eliminadas',
+  'home.resyncGlobal.busy': 'Sincronizando…',
+  'home.resyncGlobal.result': 'resync-global: {count} filas actualizadas',
+
+  // api/asyncCli (solo copy de la GUI — los literales que hacen match contra
+  // el log del CLI se quedan en español, ver el propio archivo)
+  'asyncCli.status.processing': 'Procesando: {name}',
+  'asyncCli.status.scanning': 'Escaneando: {value}',
+  'asyncCli.status.newFilesFound': '{count} archivos nuevos encontrados…',
+  'asyncCli.error.cancelledByUser': 'Operación cancelada por el usuario',
+  'asyncCli.error.noJsonOutput': 'El CLI no produjo salida JSON',
+
+  // views/Variables
+  'variables.title': 'Variables personalizadas',
+  'variables.create.title': 'Crear variable',
+  'variables.field.name': 'Nombre',
+  'variables.create.namePlaceholder': 'Grado de nostalgia',
+  'variables.field.type': 'Tipo',
+  'variables.field.min': 'Min',
+  'variables.field.max': 'Max',
+  'variables.create.categoriesLabel': 'Categorías (solo nominal) — formato "Etiqueta:codigo,Etiqueta:codigo"',
+  'variables.create.categoriesPlaceholder': 'No:0,Sí:1',
+  'variables.list.title': 'Variables definidas',
+  'variables.classify.title': 'Clasificación visual',
+  'variables.classify.description':
+    'Recorré las fotos activas una por una y asigná el valor con el teclado — misma mecánica que el torneo.',
+  'variables.field.variable': 'Variable',
+  'variables.classify.start': 'Empezar',
+  'variables.batch.title': 'Asignar valores por lote',
+  'variables.batch.valuesLabel': 'Valores (uno por línea, formato id:valor)',
+  'variables.list.empty': 'Todavía no hay variables definidas.',
+  'variables.list.colRange': 'Rango / Categorías',
+  'variables.list.deleteTitle': 'Eliminar variable (borra también todos los valores asignados)',
+  'variables.list.deleteDialogTitle': 'Eliminar variable',
+  'variables.list.deleteDialogMessage':
+    '¿Eliminar la variable "{name}"? Se borran también todos los valores ya asignados a imágenes. Esta acción no se puede deshacer.',
+  'variables.list.deleteDialogConfirm': 'Eliminar',
+  'variables.list.deleted': 'Variable "{name}" eliminada ({count} valores borrados)',
+  'variables.create.nameRequired': 'El nombre es obligatorio',
+  'variables.create.created': 'Variable "{name}" creada',
+  'variables.batch.invalidLine': 'Línea inválida: "{line}" (formato esperado id:valor)',
+  'variables.batch.needVariableAndValues': 'Elegí una variable y al menos un valor',
+  'variables.batch.result': '{count} valores asignados a "{variable}"',
+  'variables.classify.needVariable': 'Elegí una variable',
+  'variables.classify.noActiveImages': 'No hay imágenes activas para clasificar.',
+  'variables.classifier.hint':
+    '<kbd>&larr;</kbd> anterior · <kbd>&rarr;</kbd>/<kbd>Espacio</kbd> siguiente (sin asignar) · números asignan y avanzan · <kbd>Backspace</kbd> retrocede',
+  'variables.classifier.unassigned': 'sin asignar',
+  'variables.classifier.valueLabel': 'valor: {label}',
+  'variables.classifier.assigned': '{file}: {label}',
+  'variables.classifier.lastImage': 'Llegaste a la última imagen',
+};

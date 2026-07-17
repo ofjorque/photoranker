@@ -13,6 +13,16 @@
   --color-focus-border: #4a90ff;
   --color-danger: #e55a6a;
   --color-success: #3ecf8e;
+  /* Texto de los badges de posición/empate (ver rankingBoard.css) — no se
+     puede derivar de --color-success/--color-tie-badge porque el mejor
+     contraste cambia según el brillo del fondo, que difiere entre temas. */
+  --color-success-text: #04140c;
+  --color-tie-badge-text: #221200;
+  /* Triplete RGB (sin `#`/`rgba()`) de --color-tie-badge, para poder
+     componer `rgba(var(--color-tie-badge-rgb), alpha)` en el glow del pulso
+     de empate (rankingBoard.css) — así el glow queda correcto por tema en
+     vez de un color fijo hardcodeado ahí. */
+  --color-tie-badge-rgb: 240, 160, 48;
 
   --font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
   --radius-sm: 4px;
@@ -20,9 +30,34 @@
   --radius-lg: 14px;
   --spacing-unit: 8px;
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
-  --shadow-lg: 0 12px 40px rgba(0, 0, 0, 0.55);
+  /* Stack de sombras "glossy": un highlight superior sutil (luz que "toca"
+     el borde de arriba) apilado sobre la sombra de caída — ver THEME.md,
+     "Profundidad". Mismos nombres de token que antes, así ningún componente
+     necesita cambiar: todos ya leen var(--shadow-sm/md/lg). */
+  --shadow-sm: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 4px 16px rgba(0, 0, 0, 0.45),
+    0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-lg: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 40px rgba(0, 0, 0, 0.55),
+    0 2px 8px rgba(0, 0, 0, 0.35);
   --focus-halo: 0 0 0 3px var(--color-focus-border, #4a90ff),
-    0 0 24px 4px rgba(74, 144, 255, 0.45);
+    0 0 0 6px rgba(74, 144, 255, 0.18), 0 0 28px 6px rgba(74, 144, 255, 0.5);
+  /* Glow ancho opcional, compuesto junto a --focus-halo (no lo reemplaza)
+     donde se quiera un acento más "premium" — ver rankingBoard.css. */
+  --shadow-glow-accent: 0 0 32px 8px rgba(124, 111, 255, 0.35);
+
+  /* Superficies con gradiente sutil (reemplaza el fill plano de
+     --color-surface/-raised en .panel/.panel-nested, ver base.css) — mismo
+     tono base, solo un leve degradé diagonal para sensación de "vidrio". */
+  --gradient-surface: linear-gradient(155deg, #21212e 0%, #1a1a24 55%, #17171e 100%);
+  --gradient-surface-raised: linear-gradient(155deg, #292939 0%, #21212e 55%, #1c1c27 100%);
+
+  /* Glow ambiental muy tenue detrás de todo el shell — ver base.css, body. */
+  --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(124, 111, 255, 0.16), transparent 60%);
+
+  /* Efecto vidrio esmerilado para overlays que flotan SOBRE fotos
+     (ConfirmDialog/Lightbox/LoadingOverlay) — los `.panel` normales, que
+     están sobre el fondo plano de la app, usan el gradiente opaco de arriba
+     en vez de esto (ver THEME.md). */
+  --glass-bg: rgba(26, 26, 36, 0.72);
+  --glass-blur: 16px;
 }

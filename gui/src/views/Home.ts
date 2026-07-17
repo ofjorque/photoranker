@@ -9,69 +9,76 @@ import { showToast } from '../toast';
 import { navigate } from '../router';
 import { showLoadingOverlay, withButtonBusy } from '../components/LoadingOverlay';
 import { confirmDialog } from '../components/ConfirmDialog';
+import { t } from '../i18n';
 
-const INIT_PHASES = [
-  'Escaneando la carpeta…',
-  'Extrayendo miniaturas…',
-  'Calculando pHash…',
-  'Calculando métricas de calidad…',
-  'Emparejando RAW+JPEG del mismo disparo…',
-];
+function initPhases(): string[] {
+  return [
+    t('home.init.phase.scanning'),
+    t('home.init.phase.thumbnails'),
+    t('home.init.phase.phash'),
+    t('home.init.phase.quality'),
+    t('home.init.phase.pairing'),
+  ];
+}
 
 export async function renderHome(container: HTMLElement): Promise<void> {
   const project = getProject();
 
   container.innerHTML = `
     <div class="view">
-      <h1>Proyecto</h1>
+      <h1>${t('home.title')}</h1>
       <div class="panel">
         <div class="field">
-          <label>Carpeta de fotos</label>
+          <label>${t('home.folder.label')}</label>
           <div class="input-row">
-            <input type="text" id="folder-input" placeholder="C:\\Fotos\\Boda_Juan" value="${
+            <input type="text" id="folder-input" placeholder="${t('home.folder.placeholder')}" value="${
               project?.folderPath ?? ''
             }" style="flex:1" />
-            <button class="btn" id="pick-folder-btn">Elegir…</button>
+            <button class="btn" id="pick-folder-btn">${t('home.folder.pick')}</button>
           </div>
         </div>
         <div class="spacer-md"></div>
-        <button class="btn btn-primary" id="init-btn">Inicializar / Actualizar (init)</button>
+        <button class="btn btn-primary" id="init-btn">${t('home.init.button')}</button>
       </div>
 
       ${
         project
           ? `
       <div class="panel">
-        <h2>Acciones sobre <span class="mono">${project.folderPath}</span></h2>
+        <h2>${t('home.actions.heading', { folderPath: project.folderPath })}</h2>
         <div class="panel-row panel-row--wrap">
           <button class="btn" id="prune-btn">prune</button>
           <button class="btn" id="burst-detect-btn">burst-detect</button>
-          <button class="btn btn-primary" id="goto-bursts-btn">Ir a ráfagas &rarr;</button>
-          <button class="btn btn-primary" id="goto-tournament-btn">Ir a torneo &rarr;</button>
+          <button class="btn btn-primary" id="goto-bursts-btn">${t('home.actions.gotoBursts')}</button>
+          <button class="btn btn-primary" id="goto-tournament-btn">${t('home.actions.gotoTournament')}</button>
         </div>
       </div>
       <div class="panel" id="result-panel" style="display:none"></div>
 
       <div class="panel panel-danger-zone">
-        <h2>Deshacer / reiniciar torneo</h2>
-        <p>Por si te equivocaste al mandar un grupo, o querés volver a empezar el torneo de esta carpeta desde cero.</p>
+        <h2>${t('home.dangerZone.title')}</h2>
+        <p>${t('home.dangerZone.description')}</p>
         <div class="panel-row panel-row--wrap">
-          <button class="btn" id="undo-btn">tournament-undo (deshacer último grupo)</button>
-          <button class="btn btn-danger" id="reset-tournament-btn">tournament-reset (reiniciar esta carpeta)</button>
-        </div>
-      </div>
-
-      <div class="panel panel-danger-zone">
-        <h2>Índice global</h2>
-        <p>Operaciones sobre <code>global_index.sqlite</code> — afectan a <strong>todas</strong> tus carpetas. Úsalas solo si sabés lo que hacen.</p>
-        <div class="panel-row panel-row--wrap">
-          <button class="btn" id="resync-global-btn" title="Repara las rutas en el índice si moviste esta carpeta">resync-global</button>
-          <button class="btn btn-danger" id="reset-global-btn" title="Vacía el índice global completo">reset-global-index</button>
+          <button class="btn" id="undo-btn">${t('home.dangerZone.undo')}</button>
+          <button class="btn btn-danger" id="reset-tournament-btn">${t('home.dangerZone.reset')}</button>
         </div>
       </div>
       `
           : ''
       }
+
+      <div class="panel panel-danger-zone">
+        <h2>${t('home.globalIndex.title')}</h2>
+        <p>${t('home.globalIndex.description')}</p>
+        <div class="panel-row panel-row--wrap">
+          ${
+            project
+              ? `<button class="btn" id="resync-global-btn" title="${t('home.globalIndex.resyncTitle')}">resync-global</button>`
+              : ''
+          }
+          <button class="btn btn-danger" id="reset-global-btn" title="${t('home.globalIndex.resetTitle')}">reset-global-index</button>
+        </div>
+      </div>
     </div>
   `;
 
@@ -96,27 +103,33 @@ export async function renderHome(container: HTMLElement): Promise<void> {
   container.querySelector('#init-btn')?.addEventListener('click', async () => {
     const folder = folderInput.value.trim();
     if (!folder) {
-      showToast('Elegí una carpeta primero', true);
+      showToast(t('home.folder.needFolder'), true);
       return;
     }
     const run = cli.initAsync(folder, (_stream, line) => {
       const status = extractLogStatus(line);
       if (status) overlayHandle.setStatus(status);
     });
-    const overlayHandle = showLoadingOverlay('Inicializando carpeta…', INIT_PHASES, {
+    const overlayHandle = showLoadingOverlay(t('home.init.loadingTitle'), initPhases(), {
       onCancel: () => run.cancel(),
     });
     try {
       const data = await run.promise;
       setProject({ folderPath: folder, dbPath: dbPathFor(folder) });
-      const pairedNote = data.paired_raw_jpeg > 0 ? `, ${data.paired_raw_jpeg} pares RAW+JPEG fusionados` : '';
+      const pairedNote =
+        data.paired_raw_jpeg > 0 ? t('home.init.pairedNote', { count: data.paired_raw_jpeg }) : '';
       showToast(
-        `init: ${data.inserted_ok} nuevas, ${data.skipped_existing} ya existentes, ${data.inserted_failed} fallidas${pairedNote}`,
+        t('home.init.result', {
+          ok: data.inserted_ok,
+          existing: data.skipped_existing,
+          failed: data.inserted_failed,
+          pairedNote,
+        }),
       );
       renderHome(container);
     } catch (e) {
       if (e instanceof CliError && e.code === 'CANCELLED') {
-        showToast('init cancelado');
+        showToast(t('home.init.cancelled'));
       } else {
         showToast(e instanceof CliError ? e.message : String(e), true);
       }
@@ -129,9 +142,9 @@ export async function renderHome(container: HTMLElement): Promise<void> {
     if (!project) return;
     const btn = e.currentTarget as HTMLButtonElement;
     try {
-      const data = await withButtonBusy(btn, 'Corriendo…', () => cli.prune(project.dbPath));
+      const data = await withButtonBusy(btn, t('home.busyRunning'), () => cli.prune(project.dbPath));
       showResult('prune', data);
-      showToast(`prune: ${data.marked_missing} marcadas como missing`);
+      showToast(t('home.prune.result', { count: data.marked_missing }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -141,9 +154,9 @@ export async function renderHome(container: HTMLElement): Promise<void> {
     if (!project) return;
     const btn = e.currentTarget as HTMLButtonElement;
     try {
-      const data = await withButtonBusy(btn, 'Corriendo…', () => cli.burstDetect(project.dbPath));
+      const data = await withButtonBusy(btn, t('home.busyRunning'), () => cli.burstDetect(project.dbPath));
       showResult('burst-detect', data);
-      showToast(`burst-detect: ${data.bursts_created} ráfagas creadas`);
+      showToast(t('home.burstDetect.result', { count: data.bursts_created }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -153,9 +166,11 @@ export async function renderHome(container: HTMLElement): Promise<void> {
     if (!project) return;
     const btn = e.currentTarget as HTMLButtonElement;
     try {
-      const data = await withButtonBusy(btn, 'Deshaciendo…', () => cli.tournamentUndo(project.dbPath));
+      const data = await withButtonBusy(btn, t('home.undo.busy'), () => cli.tournamentUndo(project.dbPath));
       showResult('tournament-undo', data);
-      showToast(`Deshecho: grupo ${data.group_id.slice(0, 8)}… (${data.reverted_images.length} imágenes)`);
+      showToast(
+        t('home.undo.result', { groupId: data.group_id.slice(0, 8), count: data.reverted_images.length }),
+      );
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -171,16 +186,18 @@ export async function renderHome(container: HTMLElement): Promise<void> {
     // 'textContent')").
     const btn = e.currentTarget as HTMLButtonElement;
     const confirmed = await confirmDialog({
-      title: 'Reiniciar torneo',
-      message: `¿Reiniciar el torneo de "${project.folderPath}"? mu/sigma vuelven al default en todas las imágenes activas. No afecta las decisiones de ráfaga (rejected).`,
-      confirmLabel: 'Reiniciar',
+      title: t('home.resetTournament.confirmTitle'),
+      message: t('home.resetTournament.confirmMessage', { folderPath: project.folderPath }),
+      confirmLabel: t('home.resetTournament.confirmLabel'),
       danger: true,
     });
     if (!confirmed) return;
     try {
-      const data = await withButtonBusy(btn, 'Reiniciando…', () => cli.tournamentReset(project.dbPath));
+      const data = await withButtonBusy(btn, t('home.resetTournament.busy'), () =>
+        cli.tournamentReset(project.dbPath),
+      );
       showResult('tournament-reset', data);
-      showToast(`tournament-reset: ${data.images_reset} imágenes reiniciadas`);
+      showToast(t('home.resetTournament.result', { count: data.images_reset }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -189,16 +206,16 @@ export async function renderHome(container: HTMLElement): Promise<void> {
   container.querySelector<HTMLButtonElement>('#reset-global-btn')?.addEventListener('click', async (e) => {
     const btn = e.currentTarget as HTMLButtonElement;
     const confirmed = await confirmDialog({
-      title: 'Vaciar índice global',
-      message: 'Afecta el cálculo de estrellas de TODAS tus carpetas hasta que vuelvan a sincronizarse. Esta acción no se puede deshacer.',
-      confirmLabel: 'Vaciar todo',
+      title: t('home.resetGlobal.confirmTitle'),
+      message: t('home.resetGlobal.confirmMessage'),
+      confirmLabel: t('home.resetGlobal.confirmLabel'),
       danger: true,
     });
     if (!confirmed) return;
     try {
-      const data = await withButtonBusy(btn, 'Vaciando…', () => cli.resetGlobalIndex());
+      const data = await withButtonBusy(btn, t('home.resetGlobal.busy'), () => cli.resetGlobalIndex());
       showResult('reset-global-index', data);
-      showToast(`reset-global-index: ${data.rows_deleted} filas eliminadas`);
+      showToast(t('home.resetGlobal.result', { count: data.rows_deleted }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -208,9 +225,9 @@ export async function renderHome(container: HTMLElement): Promise<void> {
     if (!project) return;
     const btn = e.currentTarget as HTMLButtonElement;
     try {
-      const data = await withButtonBusy(btn, 'Sincronizando…', () => cli.resyncGlobal(project.folderPath));
+      const data = await withButtonBusy(btn, t('home.resyncGlobal.busy'), () => cli.resyncGlobal(project.folderPath));
       showResult('resync-global', data);
-      showToast(`resync-global: ${data.rows_updated} filas actualizadas`);
+      showToast(t('home.resyncGlobal.result', { count: data.rows_updated }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }

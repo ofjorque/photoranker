@@ -9,6 +9,8 @@
 import './rankingBoard.css';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
 import { makeZoomable } from './Lightbox';
+import { isTypingTarget } from '../utils/dom';
+import { t } from '../i18n';
 
 export interface RankingBoardImage {
   id: number;
@@ -52,7 +54,7 @@ export function mountRankingBoard(
     thumbWrap.className = 'thumb-wrap';
     const placeholder = document.createElement('div');
     placeholder.className = 'thumb-placeholder';
-    placeholder.textContent = 'Cargando…';
+    placeholder.textContent = t('common.loading');
     thumbWrap.appendChild(placeholder);
     card.appendChild(thumbWrap);
 
@@ -83,7 +85,7 @@ export function mountRankingBoard(
       } else {
         const fail = document.createElement('div');
         fail.className = 'thumb-placeholder';
-        fail.textContent = 'Sin miniatura';
+        fail.textContent = t('common.noThumbnail');
         thumbWrap.appendChild(fail);
       }
     });
@@ -93,16 +95,13 @@ export function mountRankingBoard(
   footer.className = 'ranking-board-footer';
   const hint = document.createElement('div');
   hint.className = 'ranking-hint';
-  hint.innerHTML =
-    '<kbd>&larr;&rarr;</kbd>/<kbd>Tab</kbd> mover foco · <kbd>1</kbd>-<kbd>' +
-    images.length +
-    '</kbd> asignar posición · <kbd>Enter</kbd> confirmar · <kbd>Backspace</kbd>/<kbd>R</kbd> reiniciar';
+  hint.innerHTML = t('rankingBoard.hint.controls', { count: images.length });
   const message = document.createElement('div');
   message.className = 'ranking-hint';
   message.style.color = 'var(--color-danger)';
   const submitBtn = document.createElement('button');
   submitBtn.className = 'btn btn-primary';
-  submitBtn.textContent = 'Confirmar (Enter)';
+  submitBtn.textContent = t('rankingBoard.confirm');
   submitBtn.addEventListener('click', trySubmit);
 
   footer.appendChild(hint);
@@ -134,7 +133,7 @@ export function mountRankingBoard(
       const tied = (countByPosition.get(pos) ?? 0) > 1;
       badge.className = 'position-badge' + (tied ? ' tie' : '');
       badge.textContent = tied ? `=${pos}` : String(pos);
-      badge.title = tied ? `Empate en posición ${pos}` : `Posición ${pos}`;
+      badge.title = tied ? t('rankingBoard.badge.tied', { pos }) : t('rankingBoard.badge.position', { pos });
       card.appendChild(badge);
     });
   }
@@ -154,7 +153,7 @@ export function mountRankingBoard(
   function trySubmit() {
     const missing = images.filter((img) => !positions.has(img.id));
     if (missing.length > 0) {
-      message.textContent = `Faltan ${missing.length} imagen(es) por ordenar`;
+      message.textContent = t('rankingBoard.missing', { count: missing.length });
       return;
     }
     const ranking: Array<[number, number]> = images.map((img) => [img.id, positions.get(img.id)!]);
@@ -164,12 +163,6 @@ export function mountRankingBoard(
   function moveFocus(delta: number) {
     focusedIndex = (focusedIndex + delta + images.length) % images.length;
     renderFocus();
-  }
-
-  function isTypingTarget(target: EventTarget | null): boolean {
-    if (!(target instanceof HTMLElement)) return false;
-    const tag = target.tagName;
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
   }
 
   function onKeyDown(e: KeyboardEvent) {

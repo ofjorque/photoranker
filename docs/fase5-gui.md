@@ -26,17 +26,57 @@ La GUI debe sentirse diseñada, no un formulario HTML sin estilizar. Esto no es 
   --color-text-muted: #9a9aa5;
   --color-tie-badge: #f0a030;      /* badge de empate, ver fase3-torneo.md */
   --color-focus-border: #4a90ff;   /* borde de foco, ver fase3-torneo.md */
+  --color-success-text: #04140c;   /* texto sobre --color-success (badge de posición) */
+  --color-tie-badge-text: #221200; /* texto sobre --color-tie-badge */
   --font-family: 'Inter', sans-serif;
   --radius-md: 8px;
   --spacing-unit: 8px;
 }
 ```
 
+`--color-success-text`/`--color-tie-badge-text` existen porque el contraste correcto para el texto de un badge depende del brillo del fondo (`--color-success`/`--color-tie-badge`), que cambia entre tema oscuro y claro — no se puede derivar en CSS puro, así que son tokens independientes por tema en vez de un valor fijo hardcodeado en el componente.
+
 **Mecanismo de override por el usuario**:
 - `config.toml` define `theme_path` (ver `config.md`) — ruta opcional a un archivo `.css` externo (ej. `~/.photoranker/theme.css`).
 - Al arrancar, la GUI inyecta el CSS embebido por defecto (`theme = "dark"`/`"light"` de `config.toml`) y, si `theme_path` apunta a un archivo existente, inyecta ese archivo **después**, como un `<style>` adicional — así el override solo necesita redefinir las variables que le interesan (ej. solo `--color-accent`), y el resto hereda del tema base sin que el usuario tenga que declarar cada token.
 - Si `theme_path` no existe o el archivo no se puede leer, se ignora silenciosamente y se usa solo el tema embebido (no es un error bloqueante — un CSS de usuario mal formado no debe romper la app).
 - No se valida el contenido del CSS del usuario más allá de que el archivo exista y sea legible; si el usuario define una variable con un valor inválido, es su responsabilidad — no se sobre-ingenieriza un validador de CSS para el MVP.
+
+### Dirección "glossy" del tema oscuro (extensión de tokens, agregado por feedback de uso real)
+
+El tema oscuro por defecto se refuerza con una estética "glossy"/vidrio, pedida explícitamente por el usuario — el tema claro se mantiene deliberadamente simple/plano por contraste, ver `THEME.md`. Extiende (no reemplaza) los tokens de arriba:
+
+```css
+:root {
+  /* Stack de sombras con highlight superior sutil — mismos nombres que ya
+     leía todo componente, solo cambian los valores en dark.css. */
+  --shadow-sm: /* ... con inset 0 1px 0 rgba(255,255,255,0.04) además de la sombra de caída */;
+  --shadow-md: /* ídem, capas más profundas */;
+  --shadow-lg: /* ídem */;
+  --focus-halo: /* halo de foco existente + una capa extra de glow difuso */;
+  --shadow-glow-accent: 0 0 32px 8px rgba(124, 111, 255, 0.35); /* glow ancho opcional, se suma a --focus-halo en el foco del torneo */
+  --color-tie-badge-rgb: 240, 160, 48; /* triplete RGB de --color-tie-badge, para el glow del pulso de empate */
+  --gradient-surface: linear-gradient(155deg, ...);         /* reemplaza el fill plano de .panel */
+  --gradient-surface-raised: linear-gradient(155deg, ...);  /* reemplaza el fill plano de .panel-nested */
+  --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(124, 111, 255, 0.16), transparent 60%); /* glow tenue detrás de todo el shell (body) */
+  --glass-bg: rgba(26, 26, 36, 0.72);   /* fondo translúcido para overlays que flotan sobre fotos */
+  --glass-blur: 16px;                    /* backdrop-filter de esos mismos overlays */
+}
+```
+
+- `--gradient-surface`/`--gradient-surface-raised` sustituyen el fill plano de `--color-surface`/`--color-surface-raised` en `.panel`/`.panel-nested` (`base.css`) — los paneles normales, que están sobre el fondo plano de la app y no sobre fotos, usan este gradiente opaco.
+- `--glass-bg`/`--glass-blur` (con `backdrop-filter`) se usan solo en los overlays que sí flotan sobre contenido de fotos: `ConfirmDialog`, `Lightbox`, `LoadingOverlay`.
+- El tema claro (`light.css`) define los **mismos nombres de token** (obligatorio — si no, las reglas de `base.css`/componentes quedan rotas al cambiar de tema) pero con valores casi imperceptibles (gradientes de 1-2 tonos, sin el highlight `inset` en las sombras, glow ambiental muy tenue) — es una decisión de diseño explícita, no un descuido: el pedido de "glossy" fue específicamente para oscuro.
+
+## Internacionalización (i18n)
+
+**Decisión de diseño**: la GUI soporta español e inglés mediante dos diccionarios planos, sin librería externa (consistente con el resto de la Fase 5: vanilla TS, sin dependencias más allá de lo estrictamente necesario). Todo el copy de `gui/src/**` (vistas y componentes) pasa por una función de lookup — nunca un string en español o inglés hardcodeado directamente en un template. Esto **no** aplica al texto que la GUI parsea desde stdout/stderr del propio `photoranker.exe` (logs de `tracing`, siempre en español) — traducir la salida del CLI está fuera de este alcance.
+
+- **Diccionarios**: `gui/src/i18n/es.ts` y `gui/src/i18n/en.ts`, cada uno un `Record<string, string>` plano con el mismo conjunto de claves. Convención de nombres: `<vista_o_componente>.<área>.<elemento>` (ej. `home.init.scanning`, `tournament.hint.moveFocus`), más un namespace `common.*` para strings reusados entre vistas (botones como "Guardar"/"Cancelar").
+- **Lookup**: `gui/src/i18n/index.ts` expone `t(key: string, vars?: Record<string, string | number>): string`. Interpolación simple de `{varName}` sobre el string ya resuelto. Si la clave no existe en el idioma activo, cae a español; si tampoco existe ahí, devuelve `[[clave]]` y emite un `console.warn` — nunca rompe el render por una clave faltante.
+- **Persistencia**: `config.toml` define `language` (ver `config.md`, `"es"`/`"en"`, default `"es"`) — mismo mecanismo de comandos Tauri dedicados que `theme`/`theme_path` (`read_language_config`/`write_language_config`, cada uno toca solo esa clave del TOML sin tocar el resto).
+- **Selector**: vive en la pantalla de Ajustes, junto al selector de tema — cambiarlo aplica al instante (re-renderiza la vista actual con el nuevo diccionario) y persiste al guardar.
+- `document.documentElement.lang` se mantiene sincronizado con el idioma activo en todo momento (accesibilidad).
 
 ## Acceso a miniaturas y métricas de calidad desde la GUI
 

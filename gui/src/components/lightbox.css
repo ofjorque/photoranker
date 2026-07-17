@@ -44,7 +44,11 @@
   transform: translateX(-50%);
   display: flex;
   gap: 8px;
-  background: var(--color-surface);
+  /* Vidrio esmerilado — flota directamente sobre la foto en pantalla
+     completa, ver dark.css/light.css --glass-bg/--glass-blur y THEME.md. */
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   padding: 8px;
@@ -77,7 +81,9 @@
   z-index: 3001;
   appearance: none;
   border: 1px solid var(--color-border);
-  background: var(--color-surface);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
   color: var(--color-text);
   border-radius: var(--radius-md);
   width: 36px;

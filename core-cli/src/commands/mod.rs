@@ -4,6 +4,7 @@ pub mod cluster;
 pub mod export_xmp;
 pub mod init;
 pub mod prune;
+pub mod rehash;
 pub mod resync_global;
 pub mod thumbnails;
 pub mod tournament;

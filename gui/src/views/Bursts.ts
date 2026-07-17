@@ -6,6 +6,7 @@ import { getProject } from '../state';
 import { showToast } from '../toast';
 import { mountRankingBoard } from '../components/RankingBoard';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
+import { t } from '../i18n';
 
 async function renderResolvedBurstsSection(container: HTMLElement, dbPath: string): Promise<void> {
   let resolved: ResolvedBurst[];
@@ -17,7 +18,7 @@ async function renderResolvedBurstsSection(container: HTMLElement, dbPath: strin
   }
 
   if (resolved.length === 0) {
-    container.innerHTML = '<p>Todavía no resolviste ningún minitorneo de ráfaga.</p>';
+    container.innerHTML = `<p>${t('bursts.resolved.empty')}</p>`;
     return;
   }
 
@@ -27,15 +28,19 @@ async function renderResolvedBurstsSection(container: HTMLElement, dbPath: strin
     row.className = 'panel-nested panel-row';
     row.style.marginBottom = '8px';
     const label = document.createElement('span');
-    label.textContent = `Ráfaga #${burst.id} — ganadora: imagen ${burst.representative_image_id ?? '?'} (${burst.images.length} fotos)`;
+    label.textContent = t('bursts.resolved.row', {
+      id: burst.id,
+      representativeId: burst.representative_image_id ?? '?',
+      count: burst.images.length,
+    });
     row.appendChild(label);
     const undoBtn = document.createElement('button');
     undoBtn.className = 'btn btn-danger';
-    undoBtn.textContent = 'Deshacer';
+    undoBtn.textContent = t('bursts.resolved.undo');
     undoBtn.addEventListener('click', async () => {
       try {
         await cli.burstUndo(dbPath, burst.id);
-        showToast(`Ráfaga #${burst.id} deshecha — vuelve a estar pendiente`);
+        showToast(t('bursts.resolved.undone', { id: burst.id }));
         await renderResolvedBurstsSection(container, dbPath);
       } catch (e) {
         showToast(e instanceof CliError ? e.message : String(e), true);
@@ -56,12 +61,11 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
 
     const project = getProject();
     if (!project) {
-      container.innerHTML =
-        '<div class="view"><div class="empty-state">Abrí un proyecto primero.</div></div>';
+      container.innerHTML = `<div class="view"><div class="empty-state">${t('common.openProjectFirst')}</div></div>`;
       return;
     }
 
-    container.innerHTML = '<div class="view"><p>Cargando ráfagas pendientes…</p></div>';
+    container.innerHTML = `<div class="view"><p>${t('bursts.loadingPending')}</p></div>`;
 
     let bursts: PendingBurst[];
     try {
@@ -76,8 +80,8 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
     if (bursts.length === 0) {
       container.innerHTML = `
         <div class="view">
-          <h1>Ráfagas</h1>
-          <div class="empty-state">No hay ráfagas pendientes de minitorneo. Corré <code>burst-detect</code> en la pantalla de Proyecto si agregaste fotos nuevas.</div>
+          <h1>${t('bursts.title')}</h1>
+          <div class="empty-state">${t('bursts.noPending')}</div>
         </div>`;
       return;
     }
@@ -87,8 +91,8 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
     container.innerHTML = '';
     const heading = document.createElement('div');
     heading.className = 'view';
-    heading.innerHTML = `<h1>Ráfaga #${burst.id} <span style="color:var(--color-text-muted); font-weight:400">(${bursts.length} pendiente${bursts.length === 1 ? '' : 's'})</span></h1>
-      <p>Ordená de mejor a peor con el teclado. La ganadora (posición 1) se conserva; el resto queda marcado como <code>rejected</code>.</p>`;
+    heading.innerHTML = `<h1>${t('bursts.heading', { id: burst.id })} <span style="color:var(--color-text-muted); font-weight:400">(${bursts.length} ${bursts.length === 1 ? t('bursts.pending.one') : t('bursts.pending.other')})</span></h1>
+      <p>${t('bursts.instructions')}</p>`;
     container.appendChild(heading);
 
     // Excluir imagen(es) del burst antes de resolverlo (feedback de uso
@@ -99,7 +103,7 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
       const excludePanel = document.createElement('div');
       excludePanel.className = 'panel disclosure';
       excludePanel.style.marginTop = '12px';
-      excludePanel.innerHTML = '<h3>¿Alguna de estas fotos no es parte de la ráfaga?</h3>';
+      excludePanel.innerHTML = `<h3>${t('bursts.exclude.question')}</h3>`;
       const grid = document.createElement('div');
       grid.style.display = 'grid';
       grid.style.gridTemplateColumns = 'repeat(auto-fill, minmax(96px, 1fr))';
@@ -136,7 +140,7 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
         });
         const smallLabel = document.createElement('span');
         smallLabel.style.fontSize = '11px';
-        smallLabel.textContent = 'no es burst';
+        smallLabel.textContent = t('bursts.exclude.notBurst');
         checkboxRow.appendChild(checkbox);
         checkboxRow.appendChild(smallLabel);
         wrap.appendChild(thumb);
@@ -147,18 +151,18 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
 
       const excludeBtn = document.createElement('button');
       excludeBtn.className = 'btn';
-      excludeBtn.textContent = 'Excluir seleccionadas';
+      excludeBtn.textContent = t('bursts.exclude.button');
       excludeBtn.addEventListener('click', async () => {
         if (selected.size === 0) {
-          showToast('Seleccioná al menos una foto para excluir', true);
+          showToast(t('bursts.exclude.needSelection'), true);
           return;
         }
         try {
           const result = await cli.burstExclude(project.dbPath, burst.id, Array.from(selected));
           showToast(
             result.burst_dissolved
-              ? `Ráfaga #${burst.id} disuelta (quedaba solo 1 imagen)`
-              : `${result.excluded.length} imagen(es) excluida(s) de la ráfaga #${burst.id}`,
+              ? t('bursts.exclude.dissolved', { id: burst.id })
+              : t('bursts.exclude.excluded', { count: result.excluded.length, id: burst.id }),
           );
           await load();
         } catch (e) {
@@ -179,7 +183,11 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
         try {
           const result = await cli.burstTournament(project.dbPath, burst.id, ranking);
           showToast(
-            `Burst #${burst.id}: ganadora ${result.representative_image_id}, ${result.rejected} rechazadas`,
+            t('bursts.tournamentResult', {
+              id: burst.id,
+              representativeId: result.representative_image_id,
+              rejected: result.rejected,
+            }),
           );
           await load();
         } catch (e) {
@@ -197,8 +205,8 @@ export async function renderBursts(container: HTMLElement): Promise<() => void> 
     resolvedSection.innerHTML = `
       <div class="panel">
         <div class="panel-row" style="cursor:pointer" id="resolved-toggle">
-          <h2>Bursts ya resueltos (deshacer)</h2>
-          <span class="badge badge-muted">mostrar/ocultar</span>
+          <h2>${t('bursts.resolved.title')}</h2>
+          <span class="badge badge-muted">${t('bursts.resolved.toggle')}</span>
         </div>
         <div id="resolved-body" style="display:none; margin-top:12px"></div>
       </div>

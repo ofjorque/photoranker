@@ -1,6 +1,7 @@
 import '@fontsource-variable/inter';
 import './theme/base.css';
 import { loadTheme } from './theme';
+import { initLanguage, onLanguageChange, t } from './i18n';
 import { currentRoute, navigate, onRouteChange, type Route } from './router';
 import { getProject, onProjectChange } from './state';
 import { renderHome } from './views/Home';
@@ -31,23 +32,27 @@ const routes: Record<Route, (el: HTMLElement) => ViewCleanup | Promise<ViewClean
 // resolver ráfagas, definir/tagear variables, clusterizar (que ya puede usar
 // esas variables), recién ahí el torneo principal, y exportar al final.
 // Ajustes queda aparte al final — no es parte del flujo de trabajo secuencial.
-const navItems: Array<{ route: Route; label: string; icon: string }> = [
-  { route: 'home', label: '1. Cargar', icon: icons.folder },
-  { route: 'bursts', label: '2. Ráfagas', icon: icons.burst },
-  { route: 'variables', label: '3. Variables', icon: icons.tag },
-  { route: 'cluster', label: '4. Clustering', icon: icons.cluster },
-  { route: 'tournament', label: '5. Torneo', icon: icons.trophy },
-  { route: 'export', label: '6. Exportación', icon: icons.export },
-];
-const settingsNavItem: { route: Route; label: string; icon: string } = {
-  route: 'settings',
-  label: 'Ajustes',
-  icon: icons.settings,
-};
+// Funciones (no constantes de módulo) para que los labels se re-lean con
+// `t()` cada vez que cambia el idioma activo, en vez de quedar congelados en
+// el idioma que estaba activo cuando se evaluó el módulo.
+function navItems(): Array<{ route: Route; label: string; icon: string }> {
+  return [
+    { route: 'home', label: t('main.nav.home'), icon: icons.folder },
+    { route: 'bursts', label: t('main.nav.bursts'), icon: icons.burst },
+    { route: 'variables', label: t('main.nav.variables'), icon: icons.tag },
+    { route: 'cluster', label: t('main.nav.cluster'), icon: icons.cluster },
+    { route: 'tournament', label: t('main.nav.tournament'), icon: icons.trophy },
+    { route: 'export', label: t('main.nav.export'), icon: icons.export },
+  ];
+}
+function settingsNavItem(): { route: Route; label: string; icon: string } {
+  return { route: 'settings', label: t('main.nav.settings'), icon: icons.settings };
+}
 
 const NAV_COLLAPSED_KEY = 'photoranker-nav-collapsed';
 
 async function bootstrap() {
+  await initLanguage();
   await loadTheme();
 
   const app = document.querySelector<HTMLDivElement>('#app')!;
@@ -60,7 +65,7 @@ async function bootstrap() {
         <div id="nav-links"></div>
         <div class="nav-spacer"></div>
         <div id="nav-settings-link"></div>
-        <button class="nav-collapse-btn" id="nav-collapse-btn" title="Colapsar/expandir menú"></button>
+        <button class="nav-collapse-btn" id="nav-collapse-btn" title="${t('main.nav.toggleCollapse')}"></button>
       </nav>
       <main class="app-main" id="app-main"></main>
     </div>
@@ -85,16 +90,17 @@ async function bootstrap() {
   function renderNav() {
     const active = currentRoute();
     navLinks.innerHTML = '';
-    for (const item of navItems) {
+    for (const item of navItems()) {
       navLinks.appendChild(navButton(item, active));
     }
     navSettingsLink.innerHTML = '';
-    navSettingsLink.appendChild(navButton(settingsNavItem, active));
+    navSettingsLink.appendChild(navButton(settingsNavItem(), active));
     navCollapseBtn.innerHTML = navEl.classList.contains('app-nav--collapsed')
       ? icons.chevronRight
       : icons.chevronLeft;
+    navCollapseBtn.title = t('main.nav.toggleCollapse');
     const project = getProject();
-    navProjectPath.textContent = project ? project.folderPath : 'Ningún proyecto abierto';
+    navProjectPath.textContent = project ? project.folderPath : t('main.nav.noProject');
   }
 
   navCollapseBtn.addEventListener('click', () => {
@@ -115,6 +121,9 @@ async function bootstrap() {
 
   onRouteChange(renderCurrentRoute);
   onProjectChange(renderNav);
+  // Cambiar de idioma re-renderiza toda la vista actual (no solo el nav) —
+  // el copy de cada pantalla también depende de `t()`.
+  onLanguageChange(renderCurrentRoute);
 
   await renderCurrentRoute();
 }

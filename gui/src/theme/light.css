@@ -12,6 +12,12 @@
   --color-focus-border: #2f6fe0;
   --color-danger: #c73b4c;
   --color-success: #1f9d67;
+  /* Texto de los badges — casi blanco: los fondos de este tema son más
+     oscuros que en el tema oscuro, así que el texto casi negro del tema
+     oscuro quedaría con contraste pobre acá (ver dark.css). */
+  --color-success-text: #f4fef9;
+  --color-tie-badge-text: #fff6ea;
+  --color-tie-badge-rgb: 185, 112, 10;
 
   --font-family: 'Inter Variable', 'Inter', system-ui, sans-serif;
   --radius-sm: 4px;
@@ -19,9 +25,24 @@
   --radius-lg: 14px;
   --spacing-unit: 8px;
 
+  /* A propósito SIN el highlight superior "glossy" que sí tiene dark.css —
+     este tema se mantiene simple/plano por contraste deliberado (ver
+     THEME.md: el pedido de "glossy" fue específicamente para el tema
+     oscuro). Mismos nombres de token igual, para que ningún componente
+     rompa al cambiar de tema. */
   --shadow-sm: 0 1px 2px rgba(20, 20, 30, 0.08);
-  --shadow-md: 0 4px 16px rgba(20, 20, 30, 0.10);
+  --shadow-md: 0 4px 16px rgba(20, 20, 30, 0.1);
   --shadow-lg: 0 12px 40px rgba(20, 20, 30, 0.16);
   --focus-halo: 0 0 0 3px var(--color-focus-border, #2f6fe0),
     0 0 24px 4px rgba(47, 111, 224, 0.35);
+  --shadow-glow-accent: 0 0 24px 6px rgba(105, 82, 224, 0.22);
+
+  /* Gradientes casi imperceptibles — apenas un tinte, no una superficie
+     "de vidrio" como en dark.css (ver nota de diseño arriba). */
+  --gradient-surface: linear-gradient(155deg, #ffffff 0%, #f7f7fa 100%);
+  --gradient-surface-raised: linear-gradient(160deg, #ffffff 0%, #f4f4f8 100%);
+  --gradient-ambient: radial-gradient(circle at 30% -10%, rgba(105, 82, 224, 0.05), transparent 60%);
+
+  --glass-bg: rgba(255, 255, 255, 0.75);
+  --glass-blur: 10px;
 }

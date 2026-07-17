@@ -10,23 +10,28 @@ import { renderScreePlot } from '../components/ScreePlot';
 import { getThumbnailDataUrl } from '../api/thumbnailCache';
 import { withLoadingOverlay } from '../components/LoadingOverlay';
 import { makeZoomable } from '../components/Lightbox';
+import { t } from '../i18n';
 
-const PREVIEW_PHASES = [
-  'Invocando Rscript…',
-  'Ajustando clustMD para cada k…',
-  'Probando modelos de covarianza (EII/VII/EEI/VEI)…',
-  'Calculando BIC…',
-];
+function previewPhases(): string[] {
+  return [
+    t('cluster.phase.invokingRscript'),
+    t('cluster.phase.fittingEachK'),
+    t('cluster.phase.testingCovariance'),
+    t('cluster.phase.computingBic'),
+  ];
+}
 
-const COMMIT_PHASES = [
-  'Invocando Rscript…',
-  'Ajustando el modelo de mezcla (EM)…',
-  'Asignando cada imagen a su cluster…',
-  'Guardando resultados…',
-];
+function commitPhases(): string[] {
+  return [
+    t('cluster.phase.invokingRscript'),
+    t('cluster.phase.fittingMixture'),
+    t('cluster.phase.assigning'),
+    t('cluster.phase.saving'),
+  ];
+}
 
 async function renderClustersList(container: HTMLElement, dbPath: string): Promise<void> {
-  container.innerHTML = '<p>Cargando clusters…</p>';
+  container.innerHTML = `<p>${t('cluster.list.loading')}</p>`;
   let clusters: ClusterSummary[];
   try {
     clusters = await cli.listClusters(dbPath);
@@ -38,8 +43,7 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
   }
 
   if (clusters.length === 0) {
-    container.innerHTML =
-      '<div class="empty-state">Todavía no hay clusters comprometidos — corré <code>cluster --k</code> arriba.</div>';
+    container.innerHTML = `<div class="empty-state">${t('cluster.list.empty')}</div>`;
     return;
   }
 
@@ -56,7 +60,7 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
 
     const header = document.createElement('div');
     header.className = 'panel-row';
-    header.innerHTML = `<strong>${cluster.name ?? `Cluster ${cluster.id}`}</strong><span class="badge badge-muted">${cluster.member_count} fotos</span>`;
+    header.innerHTML = `<strong>${cluster.name ?? t('cluster.card.unnamed', { id: cluster.id })}</strong><span class="badge badge-muted">${t('cluster.card.photoCount', { count: cluster.member_count })}</span>`;
     card.appendChild(header);
 
     const thumbRow = document.createElement('div');
@@ -87,21 +91,21 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
     renameRow.style.gap = '6px';
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
-    nameInput.placeholder = 'Nombre del cluster';
+    nameInput.placeholder = t('cluster.card.namePlaceholder');
     nameInput.value = cluster.name ?? '';
     nameInput.style.flex = '1';
     const renameBtn = document.createElement('button');
     renameBtn.className = 'btn';
-    renameBtn.textContent = 'Renombrar';
+    renameBtn.textContent = t('cluster.card.rename');
     renameBtn.addEventListener('click', async () => {
       const name = nameInput.value.trim();
       if (!name) {
-        showToast('El nombre no puede estar vacío', true);
+        showToast(t('cluster.card.nameRequired'), true);
         return;
       }
       try {
         await cli.clusterRename(dbPath, cluster.id, name);
-        showToast(`Cluster ${cluster.id} renombrado a "${name}"`);
+        showToast(t('cluster.card.renamed', { id: cluster.id, name }));
         await renderClustersList(container, dbPath);
       } catch (e) {
         showToast(e instanceof CliError ? e.message : String(e), true);
@@ -120,28 +124,27 @@ async function renderClustersList(container: HTMLElement, dbPath: string): Promi
 export async function renderCluster(container: HTMLElement): Promise<void> {
   const project = getProject();
   if (!project) {
-    container.innerHTML =
-      '<div class="view"><div class="empty-state">Abrí un proyecto primero.</div></div>';
+    container.innerHTML = `<div class="view"><div class="empty-state">${t('common.openProjectFirst')}</div></div>`;
     return;
   }
   const dbPath = project.dbPath;
 
   container.innerHTML = `
     <div class="view">
-      <h1>Clustering (clustMD)</h1>
+      <h1>${t('cluster.title')}</h1>
       <div class="panel">
         <div class="panel-row">
-          <h2>Vista previa (BIC por k)</h2>
+          <h2>${t('cluster.preview.title')}</h2>
           <button class="btn" id="preview-btn">cluster --preview</button>
         </div>
         <div id="scree-plot"></div>
       </div>
 
       <div class="panel">
-        <h2>Comprometer clustering</h2>
+        <h2>${t('cluster.commit.title')}</h2>
         <div style="display:flex; gap:8px; align-items:end;">
           <div class="field">
-            <label>k (vacío = automático, mejor BIC)</label>
+            <label>${t('cluster.commit.kLabel')}</label>
             <input type="number" id="k-input" min="2" max="10" />
           </div>
           <button class="btn btn-primary" id="commit-btn">cluster --k</button>
@@ -151,7 +154,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
       </div>
 
       <div class="panel">
-        <h2>Clusters — fotos representativas para elegir el nombre</h2>
+        <h2>${t('cluster.list.title')}</h2>
         <div id="clusters-list"></div>
       </div>
     </div>
@@ -173,7 +176,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
     probThresholdRow.className = 'field disclosure';
     probThresholdRow.style.marginTop = '12px';
     probThresholdRow.innerHTML = `
-      <label>Umbral mínimo de probabilidad de pertenencia (0 = deshabilitado)</label>
+      <label>${t('cluster.probThreshold.label')}</label>
       <div class="range-row">
         <input type="range" id="prob-threshold-input" min="0" max="1" step="0.05" value="0" />
         <span class="range-value" id="prob-threshold-value">0.00</span>
@@ -193,7 +196,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
     // proceso sin Job Objects) — dejaría un Rscript.exe huérfano reteniendo
     // el lock WAL de la BD. Ver docs/fase5-gui.md.
     try {
-      const data = await withLoadingOverlay('Corriendo clustMD (R)…', PREVIEW_PHASES, () =>
+      const data = await withLoadingOverlay(t('cluster.runningLoadingTitle'), previewPhases(), () =>
         cli.clusterPreview(dbPath),
       );
       renderScreePlot(screeContainer, data.bic_by_k);
@@ -213,7 +216,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
     const probabilityThreshold =
       rangeInput && Number(rangeInput.value) > 0 ? Number(rangeInput.value) : undefined;
     try {
-      const data = await withLoadingOverlay('Corriendo clustMD (R)…', COMMIT_PHASES, () =>
+      const data = await withLoadingOverlay(t('cluster.runningLoadingTitle'), commitPhases(), () =>
         cli.clusterCommit(dbPath, k, probabilityThreshold),
       );
       commitResult.innerHTML = `<pre class="mono" style="white-space:pre-wrap">${JSON.stringify(
@@ -221,7 +224,7 @@ export async function renderCluster(container: HTMLElement): Promise<void> {
         null,
         2,
       )}</pre>`;
-      showToast(data.from_cache ? 'Clustering comprometido (modelo reutilizado de la caché)' : 'Clustering comprometido');
+      showToast(data.from_cache ? t('cluster.commit.doneFromCache') : t('cluster.commit.done'));
       await renderClustersList(clustersListContainer, dbPath);
     } catch (e) {
       const msg = e instanceof CliError ? e.message : String(e);

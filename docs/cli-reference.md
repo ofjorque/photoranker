@@ -13,6 +13,11 @@ photoranker init --path "C:\Fotos\Boda_Juan"
 # Marcar como 'missing' las fotos que ya no existen en disco (borradas/renombradas)
 photoranker prune
 
+# Recalcular hash de todas las imágenes desde la miniatura ya guardada (corrige
+# hashes calculados con una versión anterior del algoritmo de pHash — no vuelve
+# a leer los archivos originales, no es parte del flujo normal de init)
+photoranker rehash
+
 # Detectar ráfagas (basado en pHash, distancia normalizada 0-1)
 photoranker burst-detect --threshold 0.10
 

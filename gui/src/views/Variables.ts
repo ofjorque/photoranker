@@ -14,12 +14,8 @@ import { getThumbnailDataUrl } from '../api/thumbnailCache';
 import { makeZoomable } from '../components/Lightbox';
 import { confirmDialog } from '../components/ConfirmDialog';
 import { icons } from '../components/icons';
-
-function isTypingTarget(target: EventTarget | null): boolean {
-  if (!(target instanceof HTMLElement)) return false;
-  const tag = target.tagName;
-  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable;
-}
+import { isTypingTarget } from '../utils/dom';
+import { t } from '../i18n';
 
 export async function renderVariables(container: HTMLElement): Promise<() => void> {
   const cleanupFns: Array<() => void> = [];
@@ -27,60 +23,59 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
 
   const project = getProject();
   if (!project) {
-    container.innerHTML =
-      '<div class="view"><div class="empty-state">Abrí un proyecto primero.</div></div>';
+    container.innerHTML = `<div class="view"><div class="empty-state">${t('common.openProjectFirst')}</div></div>`;
     return cleanup;
   }
   const dbPath = project.dbPath;
 
   container.innerHTML = `
     <div class="view">
-      <h1>Variables personalizadas</h1>
+      <h1>${t('variables.title')}</h1>
 
       <div class="panel">
-        <h2>Crear variable</h2>
+        <h2>${t('variables.create.title')}</h2>
         <div style="display:grid; grid-template-columns: 1fr 140px 100px 100px; gap:8px; align-items:end;">
-          <div class="field"><label>Nombre</label><input type="text" id="var-name" placeholder="Grado de nostalgia" /></div>
+          <div class="field"><label>${t('variables.field.name')}</label><input type="text" id="var-name" placeholder="${t('variables.create.namePlaceholder')}" /></div>
           <div class="field">
-            <label>Tipo</label>
+            <label>${t('variables.field.type')}</label>
             <select id="var-type"><option value="ordinal">ordinal</option><option value="nominal">nominal</option></select>
           </div>
-          <div class="field"><label>Min</label><input type="number" id="var-min" /></div>
-          <div class="field"><label>Max</label><input type="number" id="var-max" /></div>
+          <div class="field"><label>${t('variables.field.min')}</label><input type="number" id="var-min" /></div>
+          <div class="field"><label>${t('variables.field.max')}</label><input type="number" id="var-max" /></div>
         </div>
         <div class="field" style="margin-top:8px">
-          <label>Categorías (solo nominal) — formato "Etiqueta:codigo,Etiqueta:codigo"</label>
-          <input type="text" id="var-categories" placeholder="No:0,Sí:1" />
+          <label>${t('variables.create.categoriesLabel')}</label>
+          <input type="text" id="var-categories" placeholder="${t('variables.create.categoriesPlaceholder')}" />
         </div>
         <button class="btn btn-primary" id="create-var-btn" style="margin-top:12px">variable-create</button>
       </div>
 
       <div class="panel">
-        <h2>Variables definidas</h2>
-        <div id="var-list"><p>Cargando…</p></div>
+        <h2>${t('variables.list.title')}</h2>
+        <div id="var-list"><p>${t('common.loading')}</p></div>
       </div>
 
       <div class="panel">
-        <h2>Clasificación visual</h2>
-        <p>Recorré las fotos activas una por una y asigná el valor con el teclado — misma mecánica que el torneo.</p>
+        <h2>${t('variables.classify.title')}</h2>
+        <p>${t('variables.classify.description')}</p>
         <div class="input-row" style="align-items:flex-end">
           <div class="field" style="flex:1">
-            <label>Variable</label>
+            <label>${t('variables.field.variable')}</label>
             <select id="classify-select"></select>
           </div>
-          <button class="btn btn-primary" id="start-classify-btn">Empezar</button>
+          <button class="btn btn-primary" id="start-classify-btn">${t('variables.classify.start')}</button>
         </div>
         <div id="classify-area" style="margin-top:16px"></div>
       </div>
 
       <div class="panel">
-        <h2>Asignar valores por lote</h2>
+        <h2>${t('variables.batch.title')}</h2>
         <div class="field">
-          <label>Variable</label>
+          <label>${t('variables.field.variable')}</label>
           <select id="var-set-select"></select>
         </div>
         <div class="field" style="margin-top:8px">
-          <label>Valores (uno por línea, formato id:valor)</label>
+          <label>${t('variables.batch.valuesLabel')}</label>
           <textarea id="var-set-values" rows="5" placeholder="42:4&#10;17:2&#10;58:5"></textarea>
         </div>
         <button class="btn btn-primary" id="set-values-btn" style="margin-top:12px">variable-set</button>
@@ -108,14 +103,14 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
 
   function renderList() {
     if (currentVariables.length === 0) {
-      listContainer.innerHTML = '<div class="empty-state">Todavía no hay variables definidas.</div>';
+      listContainer.innerHTML = `<div class="empty-state">${t('variables.list.empty')}</div>`;
       setSelect.innerHTML = '';
       classifySelect.innerHTML = '';
       return;
     }
     listContainer.innerHTML = `
       <table>
-        <thead><tr><th>Nombre</th><th>Tipo</th><th>Rango / Categorías</th><th></th></tr></thead>
+        <thead><tr><th>${t('variables.field.name')}</th><th>${t('variables.field.type')}</th><th>${t('variables.list.colRange')}</th><th></th></tr></thead>
         <tbody>
           ${currentVariables
             .map(
@@ -125,7 +120,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
                   : v.categories.map((c) => `${c.label}=${c.code}`).join(', ')
               }</td><td><button class="btn btn-danger delete-var-btn" data-variable-name="${
                 v.name
-              }" title="Eliminar variable (borra también todos los valores asignados)">${icons.trash}</button></td></tr>`,
+              }" title="${t('variables.list.deleteTitle')}">${icons.trash}</button></td></tr>`,
             )
             .join('')}
         </tbody>
@@ -140,15 +135,15 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
       btn.addEventListener('click', async () => {
         const name = btn.dataset.variableName!;
         const confirmed = await confirmDialog({
-          title: 'Eliminar variable',
-          message: `¿Eliminar la variable "${name}"? Se borran también todos los valores ya asignados a imágenes. Esta acción no se puede deshacer.`,
-          confirmLabel: 'Eliminar',
+          title: t('variables.list.deleteDialogTitle'),
+          message: t('variables.list.deleteDialogMessage', { name }),
+          confirmLabel: t('variables.list.deleteDialogConfirm'),
           danger: true,
         });
         if (!confirmed) return;
         try {
           const result = await cli.variableDelete(dbPath, name);
-          showToast(`Variable "${name}" eliminada (${result.values_deleted} valores borrados)`);
+          showToast(t('variables.list.deleted', { name, count: result.values_deleted }));
           await refreshList();
         } catch (e) {
           showToast(e instanceof CliError ? e.message : String(e), true);
@@ -168,7 +163,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
     const maxStr = container.querySelector<HTMLInputElement>('#var-max')!.value;
     const categories = container.querySelector<HTMLInputElement>('#var-categories')!.value.trim();
     if (!name) {
-      showToast('El nombre es obligatorio', true);
+      showToast(t('variables.create.nameRequired'), true);
       return;
     }
     try {
@@ -177,7 +172,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
         max: maxStr === '' ? undefined : Number(maxStr),
         categories: categories === '' ? undefined : categories,
       });
-      showToast(`Variable "${name}" creada`);
+      showToast(t('variables.create.created', { name }));
       await refreshList();
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
@@ -197,18 +192,18 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
       const id = Number(idStr);
       const val = Number(valStr);
       if (!Number.isFinite(id) || !Number.isFinite(val)) {
-        showToast(`Línea inválida: "${line}" (formato esperado id:valor)`, true);
+        showToast(t('variables.batch.invalidLine', { line }), true);
         return;
       }
       values.push([id, val]);
     }
     if (!variable || values.length === 0) {
-      showToast('Elegí una variable y al menos un valor', true);
+      showToast(t('variables.batch.needVariableAndValues'), true);
       return;
     }
     try {
       const result = await cli.variableSet(dbPath, variable, values);
-      showToast(`${result.values_set} valores asignados a "${variable}"`);
+      showToast(t('variables.batch.result', { count: result.values_set, variable }));
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -218,13 +213,13 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
     const variableName = classifySelect.value;
     const variable = currentVariables.find((v) => v.name === variableName);
     if (!variable) {
-      showToast('Elegí una variable', true);
+      showToast(t('variables.classify.needVariable'), true);
       return;
     }
     // Cada "Empezar" reemplaza el listener de teclado anterior, si había uno.
     cleanup();
     cleanupFns.length = 0;
-    classifyArea.innerHTML = '<p>Cargando…</p>';
+    classifyArea.innerHTML = `<p>${t('common.loading')}</p>`;
     let entries: VariableValueEntry[];
     try {
       entries = await cli.getVariableValues(dbPath, variableName);
@@ -235,7 +230,7 @@ export async function renderVariables(container: HTMLElement): Promise<() => voi
       return;
     }
     if (entries.length === 0) {
-      classifyArea.innerHTML = '<div class="empty-state">No hay imágenes activas para clasificar.</div>';
+      classifyArea.innerHTML = `<div class="empty-state">${t('variables.classify.noActiveImages')}</div>`;
       return;
     }
     const destroy = mountClassifier(classifyArea, dbPath, variable, entries);
@@ -265,8 +260,7 @@ function mountClassifier(
       <div id="classify-filename" style="font-size:12px; color:var(--color-text-muted); word-break:break-all;"></div>
       <div id="classify-options" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;"></div>
       <div class="ranking-hint" style="margin-top:12px;">
-        <kbd>&larr;</kbd> anterior · <kbd>&rarr;</kbd>/<kbd>Espacio</kbd> siguiente (sin asignar) ·
-        números asignan y avanzan · <kbd>Backspace</kbd> retrocede
+        ${t('variables.classifier.hint')}
       </div>
     </div>
   `;
@@ -300,9 +294,11 @@ function mountClassifier(
     const entry = entries[index];
     counterEl.textContent = `${index + 1} / ${entries.length}`;
     currentValueEl.textContent =
-      entry.value == null ? 'sin asignar' : `valor: ${optionLabel(entry.value)}`;
+      entry.value == null
+        ? t('variables.classifier.unassigned')
+        : t('variables.classifier.valueLabel', { label: optionLabel(entry.value) });
     filenameEl.textContent = entry.file_path.split(/[\\/]/).pop() ?? entry.file_path;
-    thumbEl.innerHTML = 'Cargando…';
+    thumbEl.innerHTML = t('common.loading');
 
     const codes = validCodes();
     optionsEl.innerHTML = '';
@@ -328,7 +324,7 @@ function mountClassifier(
       // navegación (ver el mismo bug ya corregido en RankingBoard).
       makeZoomable(img, () => url, filenameEl.textContent ?? '');
     } else {
-      thumbEl.textContent = 'Sin miniatura';
+      thumbEl.textContent = t('common.noThumbnail');
     }
   }
 
@@ -337,7 +333,12 @@ function mountClassifier(
     try {
       await cli.variableSet(dbPath, variable.name, [[entry.id, code]]);
       entry.value = code;
-      showToast(`${entry.file_path.split(/[\\/]/).pop()}: ${optionLabel(code)}`);
+      showToast(
+        t('variables.classifier.assigned', {
+          file: entry.file_path.split(/[\\/]/).pop() ?? entry.file_path,
+          label: optionLabel(code),
+        }),
+      );
       goNext();
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
@@ -349,7 +350,7 @@ function mountClassifier(
       index += 1;
       render();
     } else {
-      showToast('Llegaste a la última imagen');
+      showToast(t('variables.classifier.lastImage'));
     }
   }
 

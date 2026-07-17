@@ -25,6 +25,8 @@ pub struct Config {
     pub clustmd_seed: u64,
     pub theme: String,
     pub keyboard_layout: String,
+    pub exclude_dirs: Vec<String>,
+    pub language: String,
 }
 
 impl Default for Config {
@@ -47,6 +49,8 @@ impl Default for Config {
             clustmd_seed: 42,
             theme: "dark".to_string(),
             keyboard_layout: "qwerty".to_string(),
+            exclude_dirs: vec!["Selected".to_string(), "exported".to_string()],
+            language: "es".to_string(),
         }
     }
 }

@@ -5,45 +5,43 @@ import { cli, CliError } from '../api';
 import { getProject } from '../state';
 import { showToast } from '../toast';
 import { showLoadingOverlay } from '../components/LoadingOverlay';
+import { t } from '../i18n';
 
-const EXPORT_PHASES = [
-  'Leyendo ranking y clusters…',
-  'Calculando estrellas (percentiles del índice global)…',
-  'Escribiendo sidecars .xmp…',
-];
+function exportPhases(): string[] {
+  return [t('export.phase.reading'), t('export.phase.stars'), t('export.phase.writing')];
+}
 
 export async function renderExport(container: HTMLElement): Promise<void> {
   const project = getProject();
   if (!project) {
-    container.innerHTML =
-      '<div class="view"><div class="empty-state">Abrí un proyecto primero.</div></div>';
+    container.innerHTML = `<div class="view"><div class="empty-state">${t('common.openProjectFirst')}</div></div>`;
     return;
   }
   const dbPath = project.dbPath;
 
   container.innerHTML = `
     <div class="view">
-      <h1>Ranking &amp; Exportación</h1>
+      <h1>${t('export.title')}</h1>
 
       <div class="panel">
         <div class="panel-row">
-          <h2>Ranking en vivo</h2>
-          <button class="btn" id="refresh-ranking-btn">Actualizar</button>
+          <h2>${t('export.liveRanking.title')}</h2>
+          <button class="btn" id="refresh-ranking-btn">${t('common.refresh')}</button>
         </div>
-        <div id="ranking-table"><p>Cargando…</p></div>
+        <div id="ranking-table"><p>${t('common.loading')}</p></div>
       </div>
 
       <div class="panel">
         <div class="panel-row">
-          <h2>Miniaturas fallidas</h2>
-          <button class="btn" id="refresh-failed-btn">Actualizar</button>
+          <h2>${t('export.failedThumbnails.title')}</h2>
+          <button class="btn" id="refresh-failed-btn">${t('common.refresh')}</button>
         </div>
-        <div id="failed-table"><p>Cargando…</p></div>
+        <div id="failed-table"><p>${t('common.loading')}</p></div>
       </div>
 
       <div class="panel">
-        <h2>Exportar a XMP</h2>
-        <p>Escribe sidecars <code>.xmp</code> junto a cada foto (convención Darktable), de forma no destructiva.</p>
+        <h2>${t('export.xmp.title')}</h2>
+        <p>${t('export.xmp.description')}</p>
         <button class="btn btn-primary" id="export-btn">export-xmp</button>
         <div id="export-result" style="margin-top:12px"></div>
       </div>
@@ -55,16 +53,16 @@ export async function renderExport(container: HTMLElement): Promise<void> {
   const exportResult = container.querySelector<HTMLElement>('#export-result')!;
 
   async function loadRanking() {
-    rankingTable.innerHTML = '<p>Cargando…</p>';
+    rankingTable.innerHTML = `<p>${t('common.loading')}</p>`;
     try {
       const rows = await cli.ranking(dbPath);
       if (rows.length === 0) {
-        rankingTable.innerHTML = '<div class="empty-state">Sin imágenes activas.</div>';
+        rankingTable.innerHTML = `<div class="empty-state">${t('export.liveRanking.empty')}</div>`;
         return;
       }
       rankingTable.innerHTML = `
         <table>
-          <thead><tr><th>#</th><th>Archivo</th><th>μ</th><th>σ</th><th>Estado</th></tr></thead>
+          <thead><tr><th>#</th><th>${t('export.liveRanking.colFile')}</th><th>μ</th><th>σ</th><th>${t('export.liveRanking.colState')}</th></tr></thead>
           <tbody>
             ${rows
               .map(
@@ -78,7 +76,7 @@ export async function renderExport(container: HTMLElement): Promise<void> {
                       ? '<span class="badge badge-danger">rejected</span>'
                       : r.stalled
                         ? '<span class="badge badge-muted">stalled</span>'
-                        : '<span class="badge badge-success">activa</span>'
+                        : `<span class="badge badge-success">${t('export.liveRanking.active')}</span>`
                   }</td>
                 </tr>`,
               )
@@ -93,16 +91,16 @@ export async function renderExport(container: HTMLElement): Promise<void> {
   }
 
   async function loadFailed() {
-    failedTable.innerHTML = '<p>Cargando…</p>';
+    failedTable.innerHTML = `<p>${t('common.loading')}</p>`;
     try {
       const rows = await cli.listFailedThumbnails(dbPath);
       if (rows.length === 0) {
-        failedTable.innerHTML = '<div class="empty-state">Ninguna — todas las miniaturas se extrajeron bien.</div>';
+        failedTable.innerHTML = `<div class="empty-state">${t('export.failedThumbnails.empty')}</div>`;
         return;
       }
       failedTable.innerHTML = `
         <table>
-          <thead><tr><th>ID</th><th>Archivo</th><th></th></tr></thead>
+          <thead><tr><th>ID</th><th>${t('export.liveRanking.colFile')}</th><th></th></tr></thead>
           <tbody>
             ${rows
               .map(
@@ -120,7 +118,7 @@ export async function renderExport(container: HTMLElement): Promise<void> {
           const id = Number(btn.dataset.retryId);
           try {
             await cli.retryThumbnail(dbPath, id);
-            showToast(`Imagen ${id}: miniatura recuperada`);
+            showToast(t('export.failedThumbnails.retried', { id }));
             await loadFailed();
           } catch (e) {
             showToast(e instanceof CliError ? e.message : String(e), true);
@@ -142,7 +140,7 @@ export async function renderExport(container: HTMLElement): Promise<void> {
     // haciendo y que diga que todo finalizó") — no un simple toast que
     // desaparece solo, ver LoadingHandle.finish en LoadingOverlay.ts.
     exportResult.textContent = '';
-    const handle = showLoadingOverlay('Exportando a XMP…', EXPORT_PHASES);
+    const handle = showLoadingOverlay(t('export.xmp.loadingTitle'), exportPhases());
     try {
       const data = await cli.exportXmp(dbPath);
       exportResult.innerHTML = `<pre class="mono" style="white-space:pre-wrap">${JSON.stringify(
@@ -151,7 +149,11 @@ export async function renderExport(container: HTMLElement): Promise<void> {
         2,
       )}</pre>`;
       await handle.finish(
-        `${data.written} sidecars .xmp escritos (${data.excluded_failed_thumbnail} excluidas por miniatura fallida, ${data.excluded_missing} excluidas por faltantes).`,
+        t('export.xmp.result', {
+          written: data.written,
+          failedThumbnail: data.excluded_failed_thumbnail,
+          missing: data.excluded_missing,
+        }),
       );
     } catch (e) {
       const msg = e instanceof CliError ? e.message : String(e);

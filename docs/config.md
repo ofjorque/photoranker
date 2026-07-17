@@ -22,7 +22,9 @@ rscript_path = "Rscript"      # override si Rscript.exe no está en PATH, ej. "C
 clustmd_seed = 42              # semilla fija para set.seed() en run_clustmd.R, garantiza resultados deterministas
 theme = "dark"                # tema embebido de la GUI ("dark" o "light") — ver fase5-gui.md
 theme_path = ""                # ruta opcional a un .css externo que sobreescribe variables del tema (ej. "~/.photoranker/theme.css"); vacío = sin override
+language = "es"                # idioma de la interfaz GUI ("es" o "en"), default "es" — ver fase5-gui.md
 keyboard_layout = "qwerty"    # layout asumido para atajos de teclado
+exclude_dirs = ["Selected", "exported"] # nombres de carpeta (case-insensitive, cualquier profundidad) que init NO desciende a escanear — ver fase1-ingesta.md
 ```
 
 ## Ver también

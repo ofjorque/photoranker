@@ -5,9 +5,10 @@
 // genera el CSS de override y lo persiste vía los comandos Tauri
 // write_theme_config/write_theme_override.
 import { invoke } from '@tauri-apps/api/core';
-import { DEFAULT_ACCENT, getThemeConfig, injectStyle } from '../theme';
+import { DEFAULT_ACCENT, applyBaseTheme, getThemeConfig, injectStyle } from '../theme';
 import { showToast } from '../toast';
 import { confirmDialog } from '../components/ConfirmDialog';
+import { t, getLanguage, setLanguage, type Language } from '../i18n';
 
 const PREVIEW_STYLE_ID = 'photoranker-theme-override';
 
@@ -56,32 +57,34 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
     getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim() ||
     DEFAULT_ACCENT[initialTheme];
 
+  const initialLanguage = getLanguage();
+
   container.innerHTML = `
     <div class="view">
-      <h1>Ajustes</h1>
+      <h1>${t('settings.title')}</h1>
       <div class="panel">
-        <h2>Apariencia</h2>
-        <p>Los cambios se ven al instante; "Guardar" los deja persistidos para la próxima vez que abras la app.</p>
+        <h2>${t('settings.appearance.title')}</h2>
+        <p>${t('settings.appearance.description')}</p>
 
         <div class="field" style="margin-top:16px">
-          <label>Tema base</label>
+          <label>${t('settings.appearance.baseTheme')}</label>
           <div class="input-row">
             <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer">
               <input type="radio" name="base-theme" value="dark" ${initialTheme === 'dark' ? 'checked' : ''} />
-              Oscuro
+              ${t('settings.appearance.dark')}
             </label>
             <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer">
               <input type="radio" name="base-theme" value="light" ${initialTheme === 'light' ? 'checked' : ''} />
-              Claro
+              ${t('settings.appearance.light')}
             </label>
           </div>
         </div>
 
         <div class="field" style="margin-top:16px">
-          <label>Color de acento</label>
+          <label>${t('settings.appearance.accentColor')}</label>
           <div class="input-row">
             <input type="color" id="accent-input" value="${toHex(currentAccent)}" />
-            <button class="btn" id="reset-accent-btn">Restablecer</button>
+            <button class="btn" id="reset-accent-btn">${t('settings.appearance.reset')}</button>
           </div>
           <div id="accent-warning" style="display:none"></div>
         </div>
@@ -89,15 +92,32 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
         ${
           !isGuiManaged
             ? `<div class="empty-state disclosure" style="margin-top:16px; text-align:left">
-                 Ya tenés un archivo de tema personalizado en <code>${config.theme_path}</code>.
-                 Guardar acá lo va a reemplazar por el generado desde esta pantalla.
+                 ${t('settings.appearance.customThemeNotice', { path: config.theme_path })}
                </div>`
             : ''
         }
 
         <div class="panel-row" style="margin-top:20px">
           <span></span>
-          <button class="btn btn-primary" id="save-theme-btn">Guardar</button>
+          <button class="btn btn-primary" id="save-theme-btn">${t('common.save')}</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>${t('settings.language.title')}</h2>
+        <p>${t('settings.language.description')}</p>
+        <div class="field" style="margin-top:16px">
+          <label>${t('settings.language.label')}</label>
+          <div class="input-row">
+            <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer">
+              <input type="radio" name="gui-language" value="es" ${initialLanguage === 'es' ? 'checked' : ''} />
+              ${t('settings.language.spanish')}
+            </label>
+            <label style="display:flex; align-items:center; gap:6px; font-weight:400; cursor:pointer">
+              <input type="radio" name="gui-language" value="en" ${initialLanguage === 'en' ? 'checked' : ''} />
+              ${t('settings.language.english')}
+            </label>
+          </div>
         </div>
       </div>
     </div>
@@ -118,8 +138,7 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
       accentWarning.className = 'empty-state disclosure';
       accentWarning.style.textAlign = 'left';
       accentWarning.style.marginTop = '8px';
-      accentWarning.textContent =
-        'Este acento queda muy parecido al rojo de "peligro" (usado en botones destructivos, como reiniciar el torneo o vaciar el índice global) — te va a costar distinguirlos a simple vista.';
+      accentWarning.textContent = t('settings.appearance.accentWarning');
     } else {
       accentWarning.style.display = 'none';
     }
@@ -146,9 +165,9 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
   container.querySelector('#save-theme-btn')?.addEventListener('click', async () => {
     if (!isGuiManaged) {
       const confirmed = await confirmDialog({
-        title: 'Reemplazar tema personalizado',
-        message: `Ya tenés un archivo de tema en "${config.theme_path}" que no fue generado por esta pantalla. Guardar acá lo va a reemplazar.`,
-        confirmLabel: 'Reemplazar y guardar',
+        title: t('settings.appearance.replaceCustomTitle'),
+        message: t('settings.appearance.replaceCustomMessage', { path: config.theme_path }),
+        confirmLabel: t('settings.appearance.replaceCustomConfirm'),
         danger: true,
       });
       if (!confirmed) return;
@@ -157,11 +176,24 @@ export async function renderSettings(container: HTMLElement): Promise<void> {
       const theme = selectedTheme();
       await invoke('write_theme_config', { theme });
       await invoke('write_theme_override', { css: accentCss(theme, accentInput.value) });
-      document.documentElement.dataset.theme = theme;
-      showToast('Ajustes guardados');
+      applyBaseTheme(theme);
+      showToast(t('settings.appearance.saved'));
     } catch (e) {
       showToast(e instanceof Error ? e.message : String(e), true);
     }
+  });
+
+  const languageRadios = container.querySelectorAll<HTMLInputElement>('input[name="gui-language"]');
+  languageRadios.forEach((radio) => {
+    radio.addEventListener('change', async () => {
+      const lang = radio.value === 'en' ? 'en' : ('es' as Language);
+      try {
+        await invoke('write_language_config', { language: lang });
+        setLanguage(lang);
+      } catch (e) {
+        showToast(e instanceof Error ? e.message : String(e), true);
+      }
+    });
   });
 }
 

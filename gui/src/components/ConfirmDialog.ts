@@ -4,6 +4,8 @@
 // foco atrapado dentro del modal (gap que tenía Lightbox, corregido acá
 // primero por ser el componente nuevo).
 import './confirmDialog.css';
+import { cycleFocus } from './focusTrap';
+import { t } from '../i18n';
 
 export interface ConfirmDialogOptions {
   title: string;
@@ -26,9 +28,9 @@ export function confirmDialog(opts: ConfirmDialogOptions): Promise<boolean> {
       <h2 class="confirm-title">${opts.title}</h2>
       <p class="confirm-message">${opts.message}</p>
       <div class="confirm-actions">
-        <button class="btn" id="confirm-cancel">${opts.cancelLabel ?? 'Cancelar'}</button>
+        <button class="btn" id="confirm-cancel">${opts.cancelLabel ?? t('common.cancel')}</button>
         <button class="btn ${opts.danger ? 'btn-danger' : 'btn-primary'}" id="confirm-ok">${
-          opts.confirmLabel ?? 'Confirmar'
+          opts.confirmLabel ?? t('common.confirm')
         }</button>
       </div>
     `;
@@ -55,14 +57,10 @@ export function confirmDialog(opts: ConfirmDialogOptions): Promise<boolean> {
       }
       if (e.key !== 'Tab') return;
       // Foco atrapado dentro del modal — Tab/Shift+Tab ciclan entre los dos
-      // botones en vez de escapar hacia la página de atrás (gap que sí tiene
-      // Lightbox.ts hoy, ver reporte de exploración de la GUI).
-      const currentIndex = focusable.indexOf(document.activeElement as HTMLButtonElement);
+      // botones en vez de escapar hacia la página de atrás (gap que sí tenía
+      // Lightbox.ts, ver focusTrap.ts, compartido por ambos).
       e.preventDefault();
-      const nextIndex = e.shiftKey
-        ? (currentIndex - 1 + focusable.length) % focusable.length
-        : (currentIndex + 1) % focusable.length;
-      focusable[nextIndex].focus();
+      cycleFocus(focusable, e.shiftKey);
     }
 
     overlay.addEventListener('click', (e) => {

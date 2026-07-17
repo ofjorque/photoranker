@@ -38,12 +38,19 @@ export function injectStyle(id: string, css: string) {
   el.textContent = css;
 }
 
+/** Inyecta el CSS base embebido (dark.css/light.css completo) — la única
+ *  fuente de verdad del tema activo, vía variables CSS (ver fase5-gui.md,
+ *  "Theming"). Reutilizado por `views/Settings.ts` para que "Guardar"
+ *  cambie el tema al instante sin reiniciar la app. */
+export function applyBaseTheme(theme: 'dark' | 'light'): void {
+  const base = theme === 'light' ? lightCss : darkCss;
+  injectStyle('photoranker-theme-base', base);
+}
+
 export async function loadTheme(): Promise<void> {
   const config = await getThemeConfig();
 
-  const base = config.theme === 'light' ? lightCss : darkCss;
-  injectStyle('photoranker-theme-base', base);
-  document.documentElement.dataset.theme = config.theme === 'light' ? 'light' : 'dark';
+  applyBaseTheme(config.theme === 'light' ? 'light' : 'dark');
 
   if (config.theme_path && config.theme_path.trim() !== '') {
     try {

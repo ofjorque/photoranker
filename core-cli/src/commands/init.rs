@@ -43,9 +43,27 @@ fn is_supported(path: &Path) -> bool {
         || OTHER_SUPPORTED_EXTENSIONS.contains(&ext.as_str())
 }
 
-fn scan_files(root: &Path) -> Vec<PathBuf> {
+/// `true` si `entry` es una subcarpeta (no la raíz del escaneo) cuyo nombre
+/// coincide (case-insensitive) con alguno de `exclude_dirs` — ej. "Selected"
+/// o "exported", carpetas que el usuario crea a mano para juntar fotos ya
+/// elegidas/exportadas y que no deben volver a escanearse como fuente (ver
+/// docs/config.md, `exclude_dirs`). `depth() > 0` excluye la raíz misma: si
+/// el usuario apunta `init --path` directo a una carpeta llamada "Selected",
+/// el escaneo debe funcionar igual en vez de devolver cero archivos.
+fn is_excluded_dir(entry: &walkdir::DirEntry, exclude_dirs: &[String]) -> bool {
+    entry.depth() > 0
+        && entry.file_type().is_dir()
+        && entry
+            .file_name()
+            .to_str()
+            .map(|name| exclude_dirs.iter().any(|d| d.eq_ignore_ascii_case(name)))
+            .unwrap_or(false)
+}
+
+fn scan_files(root: &Path, exclude_dirs: &[String]) -> Vec<PathBuf> {
     WalkDir::new(root)
         .into_iter()
+        .filter_entry(|entry| !is_excluded_dir(entry, exclude_dirs))
         .filter_map(|entry| entry.ok())
         .filter(|entry| entry.file_type().is_file() && is_supported(entry.path()))
         .map(|entry| entry.path().to_path_buf())
@@ -235,7 +253,7 @@ pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
     let mut conn = db::open_local(&db_path)?;
 
     let existing = existing_file_paths(&conn)?;
-    let all_files = scan_files(scan_path);
+    let all_files = scan_files(scan_path, &config.exclude_dirs);
     let new_files: Vec<PathBuf> = all_files
         .into_iter()
         .filter(|p| !existing.contains(&p.to_string_lossy().to_string()))

@@ -6,6 +6,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { CliError } from './cli';
+import { t } from '../i18n';
 
 interface ProcessLogEvent {
   op_id: string;
@@ -43,11 +44,16 @@ export function extractLogStatus(rawLine: string): string | null {
   const value = fieldMatch?.[1]?.trim().replace(/^"(.*)"$/, '$1');
   const name = value ? (value.split(/[\\/]/).pop() ?? value) : null;
 
-  if (line.includes('procesando imagen') && name) return `Procesando: ${name}`;
-  if (line.includes('escaneando carpeta') && value) return `Escaneando: ${value}`;
+  // Los literales 'procesando imagen'/'escaneando carpeta'/'archivos nuevos
+  // encontrados' de abajo hacen match contra el log de `tracing` del propio
+  // CLI (siempre en español, ver core-cli/src/commands/init.rs) — NO son
+  // copy de la GUI y no se traducen. El texto que sí se muestra al usuario
+  // (los `t(...)` de la derecha) sí pasa por i18n.
+  if (line.includes('procesando imagen') && name) return t('asyncCli.status.processing', { name });
+  if (line.includes('escaneando carpeta') && value) return t('asyncCli.status.scanning', { value });
   const nuevosMatch = line.match(/nuevos=(\d+)/);
   if (line.includes('archivos nuevos encontrados') && nuevosMatch) {
-    return `${nuevosMatch[1]} archivos nuevos encontrados…`;
+    return t('asyncCli.status.newFilesFound', { count: nuevosMatch[1] });
   }
   return null;
 }
@@ -82,11 +88,11 @@ export function runPhotorankerAsync<T>(
         cleanup();
         const { envelope, error, cancelled } = event.payload;
         if (cancelled) {
-          reject(new CliError('CANCELLED', 'Operación cancelada por el usuario'));
+          reject(new CliError('CANCELLED', t('asyncCli.error.cancelledByUser')));
           return;
         }
         if (!envelope) {
-          reject(new Error(error ?? 'El CLI no produjo salida JSON'));
+          reject(new Error(error ?? t('asyncCli.error.noJsonOutput')));
           return;
         }
         if (envelope.status === 'error') {

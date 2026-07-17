@@ -7,6 +7,7 @@
 import { cli } from '../api';
 import type { QualityMetrics } from '../api/types';
 import { icons } from './icons';
+import { t } from '../i18n';
 
 const SHARPNESS_WARN_THRESHOLD = 50; // varianza del Laplaciano baja = foto poco nítida
 const CLIPPING_WARN_PCT = 5; // % de píxeles clippeados considerado alto
@@ -29,7 +30,7 @@ const METER_MAX = {
 function meterBar(value: number, max: number, warnActive: boolean): string {
   const pct = Math.max(0, Math.min(100, (value / max) * 100));
   const barClass = warnActive ? 'meter-bar-fill meter-bar-fill--warn' : 'meter-bar-fill';
-  return `<div class="meter-bar" role="img" aria-label="${value.toFixed(1)} de ${max}">
+  return `<div class="meter-bar" role="img" aria-label="${t('qualityPanel.meterAriaLabel', { value: value.toFixed(1), max })}">
     <div class="${barClass}" style="width:${pct}%"></div>
   </div>`;
 }
@@ -56,19 +57,18 @@ export async function renderQualityPanel(
   dbPath: string,
   imageId: number,
 ): Promise<void> {
-  container.innerHTML = '<p>Cargando métricas…</p>';
+  container.innerHTML = `<p>${t('qualityPanel.loading')}</p>`;
   let metrics: QualityMetrics | null;
   try {
     const result = await cli.getQualityMetrics(dbPath, imageId);
     metrics = result.metrics;
   } catch {
-    container.innerHTML = '<div class="empty-state">No se pudieron leer las métricas de calidad.</div>';
+    container.innerHTML = `<div class="empty-state">${t('qualityPanel.loadError')}</div>`;
     return;
   }
 
   if (!metrics) {
-    container.innerHTML =
-      '<div class="empty-state">Sin métricas de calidad (la miniatura de esta imagen falló, ver <code>list-failed-thumbnails</code>).</div>';
+    container.innerHTML = `<div class="empty-state">${t('qualityPanel.noMetrics')}</div>`;
     return;
   }
 
@@ -78,38 +78,54 @@ export async function renderQualityPanel(
 
   const rows = [
     metricRow(
-      'Nitidez (sharpness)',
+      t('qualityPanel.metric.sharpness'),
       metrics.sharpness.toFixed(1),
       meterBar(metrics.sharpness, METER_MAX.sharpness, sharpnessWarn),
-      { active: sharpnessWarn, reason: 'Varianza del Laplaciano baja: posible foto desenfocada' },
+      { active: sharpnessWarn, reason: t('qualityPanel.warn.sharpness') },
     ),
-    metricRow('Brillo', metrics.brightness.toFixed(1), meterBar(metrics.brightness, METER_MAX.brightness, false)),
-    metricRow('Contraste', metrics.contrast.toFixed(1), meterBar(metrics.contrast, METER_MAX.contrast, false)),
     metricRow(
-      'Sobreexposición',
+      t('qualityPanel.metric.brightness'),
+      metrics.brightness.toFixed(1),
+      meterBar(metrics.brightness, METER_MAX.brightness, false),
+    ),
+    metricRow(
+      t('qualityPanel.metric.contrast'),
+      metrics.contrast.toFixed(1),
+      meterBar(metrics.contrast, METER_MAX.contrast, false),
+    ),
+    metricRow(
+      t('qualityPanel.metric.overexposed'),
       `${metrics.overexposed_pct.toFixed(1)}%`,
       meterBar(metrics.overexposed_pct, 100, overWarn),
-      { active: overWarn, reason: 'Más del 5% de píxeles con clipping por sobreexposición' },
+      { active: overWarn, reason: t('qualityPanel.warn.overexposed') },
     ),
     metricRow(
-      'Subexposición',
+      t('qualityPanel.metric.underexposed'),
       `${metrics.underexposed_pct.toFixed(1)}%`,
       meterBar(metrics.underexposed_pct, 100, underWarn),
-      { active: underWarn, reason: 'Más del 5% de píxeles con clipping por subexposición' },
+      { active: underWarn, reason: t('qualityPanel.warn.underexposed') },
     ),
-    metricRow('Saturación', metrics.saturation.toFixed(2), meterBar(metrics.saturation, METER_MAX.saturation, false)),
     metricRow(
-      'Colorido (colorfulness)',
+      t('qualityPanel.metric.saturation'),
+      metrics.saturation.toFixed(2),
+      meterBar(metrics.saturation, METER_MAX.saturation, false),
+    ),
+    metricRow(
+      t('qualityPanel.metric.colorfulness'),
       metrics.colorfulness.toFixed(2),
       meterBar(metrics.colorfulness, METER_MAX.colorfulness, false),
     ),
-    metricRow('Entropía', metrics.entropy.toFixed(2), meterBar(metrics.entropy, METER_MAX.entropy, false)),
     metricRow(
-      'Color promedio',
+      t('qualityPanel.metric.entropy'),
+      metrics.entropy.toFixed(2),
+      meterBar(metrics.entropy, METER_MAX.entropy, false),
+    ),
+    metricRow(
+      t('qualityPanel.metric.averageColor'),
       `rgb(${metrics.average_r}, ${metrics.average_g}, ${metrics.average_b})`,
       `<span class="swatch" style="background: rgb(${metrics.average_r}, ${metrics.average_g}, ${metrics.average_b})"></span>`,
     ),
-    metricRow('Orientación', metrics.orientation, null),
+    metricRow(t('qualityPanel.metric.orientation'), metrics.orientation, null),
   ].join('');
 
   container.innerHTML = `<table class="quality-table"><tbody>${rows}</tbody></table>`;

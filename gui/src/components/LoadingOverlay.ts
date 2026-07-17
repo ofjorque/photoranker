@@ -8,6 +8,7 @@
 // docs/fase5-gui.md, agregado por feedback de uso real.
 import './loadingOverlay.css';
 import { icons } from './icons';
+import { t } from '../i18n';
 
 export interface LoadingHandle {
   close: () => void;
@@ -39,7 +40,7 @@ export function showLoadingOverlay(
       <div class="loading-title">${title}</div>
       <div class="loading-phase"></div>
       <div class="loading-elapsed"></div>
-      ${options.onCancel ? '<button class="btn btn-danger" id="loading-cancel-btn">Cancelar</button>' : ''}
+      ${options.onCancel ? `<button class="btn btn-danger" id="loading-cancel-btn">${t('common.cancel')}</button>` : ''}
     </div>
   `;
   document.body.appendChild(overlay);
@@ -70,7 +71,7 @@ export function showLoadingOverlay(
 
   cancelBtn?.addEventListener('click', () => {
     cancelBtn.disabled = true;
-    cancelBtn.textContent = 'Cancelando…';
+    cancelBtn.textContent = t('loadingOverlay.cancelling');
     options.onCancel?.();
   });
 
@@ -93,9 +94,9 @@ export function showLoadingOverlay(
         card.classList.add('loading-card--done');
         card.innerHTML = `
           <div class="loading-done-icon">${icons.check}</div>
-          <div class="loading-title">Listo</div>
+          <div class="loading-title">${t('loadingOverlay.done')}</div>
           <div class="loading-phase" style="opacity:1">${message}</div>
-          <button class="btn btn-primary" id="loading-close-btn">Cerrar</button>
+          <button class="btn btn-primary" id="loading-close-btn">${t('common.close')}</button>
         `;
         const closeBtn = card.querySelector<HTMLButtonElement>('#loading-close-btn')!;
 

@@ -384,6 +384,61 @@ fn write_theme_override(css: String) -> Result<(), String> {
     std::fs::write(&config_path, serialized).map_err(|e| e.to_string())
 }
 
+#[derive(Serialize, Deserialize, Default)]
+struct LanguageConfig {
+    language: String,
+}
+
+/// Lee `language` de `config.toml` — mismo archivo y mismo criterio que
+/// `read_theme_config` (texto plano, no la BD de una carpeta; default si el
+/// archivo no existe todavía). Comando propio en vez de generalizar
+/// `read_theme_config` porque cada comando de este archivo gestiona
+/// exactamente una clave (ver `write_theme_config`/`write_theme_override`).
+#[tauri::command]
+fn read_language_config() -> LanguageConfig {
+    let Some(dirs) = ProjectDirs::from("", "", "photoranker") else {
+        return LanguageConfig {
+            language: "es".into(),
+        };
+    };
+    let config_path = dirs.config_dir().join("config.toml");
+    let Ok(text) = std::fs::read_to_string(&config_path) else {
+        return LanguageConfig {
+            language: "es".into(),
+        };
+    };
+    let parsed: toml::Value =
+        toml::from_str(&text).unwrap_or_else(|_| toml::Value::Table(Default::default()));
+    let language = parsed
+        .get("language")
+        .and_then(|v| v.as_str())
+        .unwrap_or("es")
+        .to_string();
+    LanguageConfig { language }
+}
+
+/// Actualiza solo la clave `language` de `config.toml`, preservando el resto
+/// (mismo patrón que `write_theme_config`).
+#[tauri::command]
+fn write_language_config(language: String) -> Result<(), String> {
+    let dir = photoranker_config_dir()?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let config_path = dir.join("config.toml");
+
+    let mut parsed: toml::Value = std::fs::read_to_string(&config_path)
+        .ok()
+        .and_then(|text| toml::from_str(&text).ok())
+        .unwrap_or_else(|| toml::Value::Table(Default::default()));
+
+    let table = parsed
+        .as_table_mut()
+        .ok_or_else(|| "config.toml no tiene la forma esperada (tabla TOML)".to_string())?;
+    table.insert("language".to_string(), toml::Value::String(language));
+
+    let serialized = toml::to_string_pretty(&parsed).map_err(|e| e.to_string())?;
+    std::fs::write(&config_path, serialized).map_err(|e| e.to_string())
+}
+
 /// Para que la pantalla de Ajustes pueda advertir antes de pisar un
 /// `theme_path` que el usuario haya apuntado a mano a un archivo propio (ver
 /// docs/fase5-gui.md, nota de diseño de la pantalla de Ajustes).
@@ -433,6 +488,8 @@ pub fn run() {
             write_theme_config,
             write_theme_override,
             theme_path_is_gui_managed,
+            read_language_config,
+            write_language_config,
             pick_folder
         ])
         .run(tauri::generate_context!())

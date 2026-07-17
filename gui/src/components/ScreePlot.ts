@@ -1,6 +1,8 @@
 // Scree plot de BIC para `cluster --preview` (ver docs/fase2-clustering.md:
 // "mayor valor = mejor ajuste", convención mclust). SVG inline, sin
 // dependencias externas de gráficos, leyendo solo var(--...) para color.
+import { t } from '../i18n';
+
 export function renderScreePlot(container: HTMLElement, bicByK: Record<string, number>): void {
   container.innerHTML = '';
   const entries = Object.entries(bicByK)
@@ -10,7 +12,7 @@ export function renderScreePlot(container: HTMLElement, bicByK: Record<string, n
   if (entries.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty-state';
-    empty.textContent = 'Sin datos de BIC para graficar.';
+    empty.textContent = t('screePlot.noData');
     container.appendChild(empty);
     return;
   }
@@ -43,7 +45,7 @@ export function renderScreePlot(container: HTMLElement, bicByK: Record<string, n
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('width', '100%');
   svg.setAttribute('role', 'img');
-  svg.setAttribute('aria-label', 'Scree plot de BIC por número de clusters');
+  svg.setAttribute('aria-label', t('screePlot.ariaLabel'));
 
   const axisColor = getComputedStyle(container).getPropertyValue('--color-border') || '#2c2c3a';
   const mutedColor =
@@ -123,7 +125,7 @@ export function renderScreePlot(container: HTMLElement, bicByK: Record<string, n
   xAxisTitle.setAttribute('text-anchor', 'middle');
   xAxisTitle.setAttribute('font-size', '11');
   xAxisTitle.setAttribute('fill', mutedColor);
-  xAxisTitle.textContent = 'k (número de clusters)';
+  xAxisTitle.textContent = t('screePlot.xAxis');
   svg.appendChild(xAxisTitle);
 
   const yAxisTitle = document.createElementNS(svgNs, 'text');
@@ -133,13 +135,13 @@ export function renderScreePlot(container: HTMLElement, bicByK: Record<string, n
   yAxisTitle.setAttribute('transform', 'rotate(-90)');
   yAxisTitle.setAttribute('font-size', '11');
   yAxisTitle.setAttribute('fill', mutedColor);
-  yAxisTitle.textContent = 'BIC (mayor = mejor ajuste)';
+  yAxisTitle.textContent = t('screePlot.yAxis');
   svg.appendChild(yAxisTitle);
 
   container.appendChild(svg);
 
   const caption = document.createElement('p');
   caption.style.marginTop = '8px';
-  caption.innerHTML = `Mejor ajuste: <strong style="color:var(--color-success)">k = ${bestK}</strong> (fallback automático de <code>cluster</code> sin <code>--k</code>).`;
+  caption.innerHTML = t('screePlot.caption', { bestK });
   container.appendChild(caption);
 }

@@ -5,6 +5,8 @@
 // pantalla lo que ya existe, no revela más resolución real del archivo.
 import './lightbox.css';
 import { icons } from './icons';
+import { cycleFocus } from './focusTrap';
+import { t } from '../i18n';
 
 const MIN_SCALE = 1;
 const MAX_SCALE = 5;
@@ -16,12 +18,12 @@ export function openLightbox(src: string, alt = ''): void {
 
   const hint = document.createElement('div');
   hint.className = 'lightbox-hint';
-  hint.textContent = 'Rueda del mouse o +/- para zoom · arrastrar para mover · Esc para cerrar';
+  hint.textContent = t('lightbox.hint');
 
   const closeBtn = document.createElement('button');
   closeBtn.className = 'lightbox-close';
   closeBtn.innerHTML = icons.close;
-  closeBtn.title = 'Cerrar (Esc)';
+  closeBtn.title = t('lightbox.closeTitle');
 
   const stage = document.createElement('div');
   stage.className = 'lightbox-stage';
@@ -36,13 +38,13 @@ export function openLightbox(src: string, alt = ''): void {
   controls.className = 'lightbox-controls';
   const zoomOutBtn = document.createElement('button');
   zoomOutBtn.innerHTML = icons.zoomOut;
-  zoomOutBtn.title = 'Alejar';
+  zoomOutBtn.title = t('lightbox.zoomOut');
   const resetBtn = document.createElement('button');
   resetBtn.innerHTML = icons.zoomReset;
-  resetBtn.title = 'Restablecer zoom (1:1)';
+  resetBtn.title = t('lightbox.zoomReset');
   const zoomInBtn = document.createElement('button');
   zoomInBtn.innerHTML = icons.zoomIn;
-  zoomInBtn.title = 'Acercar';
+  zoomInBtn.title = t('lightbox.zoomIn');
   controls.appendChild(zoomOutBtn);
   controls.appendChild(resetBtn);
   controls.appendChild(zoomInBtn);
@@ -95,12 +97,8 @@ export function openLightbox(src: string, alt = ''): void {
     else if (e.key === '-') setScale(scale - SCALE_STEP);
     else if (e.key === '0') setScale(1);
     else if (e.key === 'Tab') {
-      const currentIndex = focusable.indexOf(document.activeElement as HTMLButtonElement);
       e.preventDefault();
-      const nextIndex = e.shiftKey
-        ? (currentIndex - 1 + focusable.length) % focusable.length
-        : (currentIndex + 1) % focusable.length;
-      focusable[nextIndex].focus();
+      cycleFocus(focusable, e.shiftKey);
     }
   }
 

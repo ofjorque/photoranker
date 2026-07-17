@@ -37,6 +37,13 @@ enum Commands {
         #[arg(long)]
         db: Option<PathBuf>,
     },
+    /// Recalcula `hash` de todas las imágenes desde la miniatura ya guardada
+    /// (corrige hashes calculados con una versión anterior del algoritmo de
+    /// pHash — no vuelve a leer los archivos originales).
+    Rehash {
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
     /// Detecta ráfagas por distancia normalizada de pHash.
     #[command(name = "burst-detect")]
     BurstDetect {
@@ -315,6 +322,11 @@ fn run(cli: Cli) -> AppResult<Value> {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
             let mut conn = db::open_local(&db_path)?;
             commands::prune::run(&mut conn, &db_path)
+        }
+        Commands::Rehash { db } => {
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let mut conn = db::open_local(&db_path)?;
+            commands::rehash::run(&mut conn)
         }
         Commands::BurstDetect { threshold, db } => {
             let cfg = config::load_or_init()?;
