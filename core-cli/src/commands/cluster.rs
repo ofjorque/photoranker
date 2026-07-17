@@ -4,6 +4,7 @@
 //! traduce su salida JSON al sobre estándar del CLI (docs/conventions.md).
 
 use crate::config::Config;
+use crate::db;
 use crate::error::{AppError, AppResult};
 use rusqlite::{Connection, params};
 use serde_json::{Value, json};
@@ -181,6 +182,12 @@ pub fn commit(
         }
     };
     let threshold = probability_threshold.unwrap_or(cfg.cluster_probability_threshold);
+    // `commit_raw` escribe cluster_id/clusters/image_clusters a través de la
+    // conexión propia de R (run_clustmd.R), no de `conn` — por eso el backup
+    // se dispara acá explícitamente antes de invocarlo, en vez de depender
+    // de una transacción de Rust que envuelva la escritura (ver
+    // docs/fase1-ingesta.md, "backup automático").
+    db::backup(conn, db_path)?;
     let result = commit_raw(conn, db_path, cfg, chosen_k, threshold)?;
     Ok(strip_status(result))
 }

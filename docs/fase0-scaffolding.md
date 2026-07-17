@@ -52,12 +52,12 @@
 
 ## Checklist de implementación
 
-- [ ] Crear proyecto Rust (`core-cli`) con estructura de subcomandos (`clap` con feature `derive`).
-- [ ] Definir el esquema SQLite completo de `database.md` como migraciones versionadas con `rusqlite_migration` en `migrations/001_*.sql`, `002_*.sql`, etc. **Cada migración que agregue una columna consultada en `WHERE`/`ORDER BY` debe crear su índice correspondiente en el mismo archivo** (ver los `CREATE INDEX` ya listados en `database.md`: `images(mu)`, `images(sigma)`, `images(rejected)`, `image_clusters(cluster_id)`, `burst_members(image_id)`).
-- [ ] **Habilitar `PRAGMA journal_mode=WAL;` al abrir cualquier conexión SQLite** (tanto en Rust vía `rusqlite` como en R vía `RSQLite`), antes de cualquier otra operación. Es obligatorio: sin esto, el subproceso de R falla con "database is locked" al leer/escribir sobre el mismo archivo que Rust mantiene abierto (ver "Modelo de concurrencia" en `conventions.md`).
-- [ ] Configurar `tracing`/`tracing-subscriber` con salida a stderr y nivel controlado por `RUST_LOG` (ver "Logging" en `conventions.md`).
-- [ ] Crear `config.toml` en `~/.photoranker/config.toml` (usando el crate `directories` para la ruta multiplataforma) con los defaults documentados en `config.md`.
-- [ ] Crear el índice global vacío (`~/.photoranker/global_index.sqlite`) si no existe, con la tabla `global_ratings` (también en modo WAL) — ver `database.md`.
+- [x] Crear proyecto Rust (`core-cli`) con estructura de subcomandos (`clap` con feature `derive`).
+- [x] Definir el esquema SQLite completo de `database.md` como migraciones versionadas con `rusqlite_migration` en `migrations/001_*.sql`, `002_*.sql`, etc. **Cada migración que agregue una columna consultada en `WHERE`/`ORDER BY` debe crear su índice correspondiente en el mismo archivo** (ver los `CREATE INDEX` ya listados en `database.md`: `images(mu)`, `images(sigma)`, `images(rejected)`, `image_clusters(cluster_id)`, `burst_members(image_id)`).
+- [x] **Habilitar `PRAGMA journal_mode=WAL;` al abrir cualquier conexión SQLite** (tanto en Rust vía `rusqlite` como en R vía `RSQLite`), antes de cualquier otra operación. Es obligatorio: sin esto, el subproceso de R falla con "database is locked" al leer/escribir sobre el mismo archivo que Rust mantiene abierto (ver "Modelo de concurrencia" en `conventions.md`).
+- [x] Configurar `tracing`/`tracing-subscriber` con salida a stderr y nivel controlado por `RUST_LOG` (ver "Logging" en `conventions.md`).
+- [x] Crear `config.toml` en `~/.photoranker/config.toml` (usando el crate `directories` para la ruta multiplataforma) con los defaults documentados en `config.md`.
+- [x] Crear el índice global vacío (`~/.photoranker/global_index.sqlite`) si no existe, con la tabla `global_ratings` (también en modo WAL) — ver `database.md`.
 
 ## Siguiente fase
 

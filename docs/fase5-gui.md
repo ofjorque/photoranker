@@ -85,14 +85,14 @@ La GUI llama a `get-thumbnail` por cada imagen visible en pantalla (torneo, ráf
 
 ## Checklist de implementación
 
-- [ ] Proponer y documentar (como comentario en el CSS base o un `THEME.md` corto) una dirección de diseño concreta: tipografía, paleta base, y el elemento distintivo elegido.
-- [ ] Implementar el sistema de variables CSS con los tokens mínimos listados arriba; ningún componente debe usar colores/tipografía hardcodeados.
-- [ ] Implementar la carga del tema embebido (`dark`/`light` según `config.toml`) + inyección opcional de `theme_path` como override, con fallback silencioso si el archivo no existe o es inválido.
-- [ ] Envolver todos los comandos anteriores como llamadas de subproceso desde Tauri.
-- [ ] Implementar navegación e interacción por teclado (flechas/Tab para foco, `1`–`5` para asignar posición, `Enter` para confirmar con validación de completitud, `Backspace`/`R` para reset) — replicando exactamente la mecánica descrita en `fase3-torneo.md`.
+- [x] Proponer y documentar (como comentario en el CSS base o un `THEME.md` corto) una dirección de diseño concreta: tipografía, paleta base, y el elemento distintivo elegido. *(`gui/THEME.md`.)*
+- [x] Implementar el sistema de variables CSS con los tokens mínimos listados arriba; ningún componente debe usar colores/tipografía hardcodeados.
+- [x] Implementar la carga del tema embebido (`dark`/`light` según `config.toml`) + inyección opcional de `theme_path` como override, con fallback silencioso si el archivo no existe o es inválido.
+- [x] Envolver todos los comandos anteriores como llamadas de subproceso desde Tauri.
+- [x] Implementar navegación e interacción por teclado (flechas/Tab para foco, `1`–`5` para asignar posición, `Enter` para confirmar con validación de completitud, `Backspace`/`R` para reset) — replicando exactamente la mecánica descrita en `fase3-torneo.md`.
 - [x] Feedback visual: foco = borde azul + halo (`hsl(var(--ring))`, clase `.focus-halo`); posición asignada = badge verde con número (`bg-success`); empate = badge naranjo con ícono "=" (`bg-tie-badge`, pulso vía `.animate-tie-pulse`).
-- [ ] Scree plot de BIC para `cluster --preview` (ver `fase2-clustering.md`).
-- [ ] Panel de referencia con métricas objetivas de calidad por imagen (valores e íconos de advertencia para baja nitidez o clipping, ver `fase1-ingesta.md`).
+- [x] Scree plot de BIC para `cluster --preview` (ver `fase2-clustering.md`).
+- [x] Panel de referencia con métricas objetivas de calidad por imagen (valores e íconos de advertencia para baja nitidez o clipping, ver `fase1-ingesta.md`).
 
 ## Siguiente fase
 

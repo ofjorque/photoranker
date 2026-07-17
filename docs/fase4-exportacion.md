@@ -83,10 +83,10 @@ Todo el proceso es no destructivo: nunca se modifica el RAW, solo los sidecars X
 
 ## Checklist de implementación
 
-- [ ] Implementar `export-xmp`: cálculo de cuantiles desde `global_ratings` (tabla de estrellas 10/25/40/20/5; si `global_ratings` tiene menos de `min_global_sample` imágenes, usar el mapeo fijo provisional sobre `mu`), mapeo `rejected=1 → -1`, tags planos en `dc:subject`, siguiendo el formato de sidecar de arriba. **Nombre del sidecar**: `<nombre_completo_original>.xmp` (convención Darktable, ej. `IMG_1234.CR2.xmp`), vía una única función auxiliar reutilizada en todo el módulo. **Excluir de la exportación** las imágenes con `thumbnail_status='failed'` o `missing=1` (ver comando `prune`, `fase1-ingesta.md`). **Merge seguro con `quick-xml`**: si ya existe un `.xmp`, preservar todo lo que no gestiona PhotoRanker y solo actualizar `xmp:Rating`/`dc:subject`.
-- [ ] Implementar la herencia de `cluster_id`/`dc:subject` desde la ganadora del burst hacia sus rechazadas, **solo si la ganadora tiene `cluster_id` asignado**; si no, la rechazada queda sin cluster.
-- [ ] Implementar `list-failed-thumbnails` y `retry-thumbnail`.
-- [ ] Implementar `resync-global --path` para reparar `source_db_path` si una carpeta fue movida/renombrada (ver `database.md` — es cosmético, no crítico).
+- [x] Implementar `export-xmp`: cálculo de cuantiles desde `global_ratings` (tabla de estrellas 10/25/40/20/5; si `global_ratings` tiene menos de `min_global_sample` imágenes, usar el mapeo fijo provisional sobre `mu`), mapeo `rejected=1 → -1`, tags planos en `dc:subject`, siguiendo el formato de sidecar de arriba. **Nombre del sidecar**: `<nombre_completo_original>.xmp` (convención Darktable, ej. `IMG_1234.CR2.xmp`), vía una única función auxiliar reutilizada en todo el módulo. **Excluir de la exportación** las imágenes con `thumbnail_status='failed'` o `missing=1` (ver comando `prune`, `fase1-ingesta.md`). **Merge seguro con `quick-xml`**: si ya existe un `.xmp`, preservar todo lo que no gestiona PhotoRanker y solo actualizar `xmp:Rating`/`dc:subject`.
+- [x] Implementar la herencia de `cluster_id`/`dc:subject` desde la ganadora del burst hacia sus rechazadas, **solo si la ganadora tiene `cluster_id` asignado**; si no, la rechazada queda sin cluster.
+- [x] Implementar `list-failed-thumbnails` y `retry-thumbnail`.
+- [x] Implementar `resync-global --path` para reparar `source_db_path` si una carpeta fue movida/renombrada (ver `database.md` — es cosmético, no crítico).
 
 ## Siguiente fase
 
