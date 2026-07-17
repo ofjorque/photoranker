@@ -36,12 +36,13 @@ Dirección propuesta para la implementación (ajustable, no bloqueante para arra
 
 ## Checklist de implementación
 
-- [ ] Agregar `hash`/`phash` a `global_ratings` (índice global) y llenarlos en la sincronización existente.
-- [ ] Implementar detección de duplicados (exacto + pHash con umbral) y el aviso de solo-lectura en la GUI.
-- [ ] Implementar `tournament-next --scope=<subfolder>` en el CLI.
-- [ ] Implementar el selector de scope en `TournamentView` (GUI).
-- [ ] Implementar el lock de archivo (`.photoranker.lock`) con espera/backoff en las escrituras del CLI.
-- [ ] Implementar la vista en grilla en el clasificador de `Variables.tsx` (GUI).
+- [x] Agregar `hash` a `global_ratings` (índice global) y llenarlo en la sincronización existente.
+- [x] Implementar detección de duplicados (`list-duplicates`, exacto + pHash con umbral) en el CLI.
+- [x] Aviso de solo-lectura en la GUI.
+- [x] Implementar `tournament-next --scope=<subfolder>` en el CLI.
+- [x] Implementar el selector de scope en `TournamentView` (GUI).
+- [x] Implementar el lock de archivo (`.photoranker.lock`) con espera/backoff en las escrituras del CLI.
+- [x] Implementar la vista en grilla en el clasificador de `Variables.tsx` (GUI).
 
 ## Siguiente fase
 

@@ -2,6 +2,7 @@
 //! búsqueda de la BD local y el índice global (ver docs/database.md, docs/conventions.md).
 
 use crate::error::{AppError, AppResult};
+use crate::lock::{self, FileLock};
 use rusqlite::Connection;
 use rusqlite_migration::{M, Migrations};
 use std::path::{Path, PathBuf};
@@ -39,6 +40,17 @@ pub fn open_local(path: &Path) -> AppResult<Connection> {
     enable_wal(&conn)?;
     MIGRATIONS.to_latest(&mut conn)?;
     Ok(conn)
+}
+
+/// Igual que `open_local`, pero además adquiere el lock de archivo
+/// preventivo de la carpeta (ver `lock.rs`) antes de abrir la conexión —
+/// usado por los comandos que **escriben** en la BD local. El `FileLock`
+/// devuelto debe mantenerse vivo mientras dure la operación; se libera solo
+/// al salir de scope.
+pub fn open_local_locked(path: &Path) -> AppResult<(Connection, FileLock)> {
+    let file_lock = lock::acquire(path)?;
+    let conn = open_local(path)?;
+    Ok((conn, file_lock))
 }
 
 /// Busca `.photoranker.sqlite` en `start_dir` o en sus directorios padres.
@@ -91,7 +103,27 @@ pub fn open_global() -> AppResult<Connection> {
         )",
         [],
     )?;
+    add_hash_column_if_missing(&conn)?;
     Ok(conn)
+}
+
+/// `global_ratings` no usa `rusqlite_migration` (es un `CREATE TABLE IF NOT
+/// EXISTS` a mano desde el día 1, ver arriba) — así que agregar una columna a
+/// una tabla que ya existía en instalaciones previas necesita su propio
+/// chequeo idempotente: `ALTER TABLE ADD COLUMN` no tiene una forma
+/// "IF NOT EXISTS" en SQLite, falla si la columna ya está. Agregada para
+/// detección de duplicados entre carpetas (ver
+/// docs/fase8-mejoras-avanzadas.md) — copia del mismo pHash ya calculado en
+/// `images.hash` de cada carpeta, sincronizado junto con `mu` (ver
+/// `commands::tournament::flush_pending_sync`).
+fn add_hash_column_if_missing(conn: &Connection) -> AppResult<()> {
+    let has_hash: bool = conn
+        .prepare("SELECT 1 FROM pragma_table_info('global_ratings') WHERE name = 'hash'")?
+        .exists([])?;
+    if !has_hash {
+        conn.execute("ALTER TABLE global_ratings ADD COLUMN hash TEXT", [])?;
+    }
+    Ok(())
 }
 
 /// Backup no destructivo vía `VACUUM INTO`, ejecutado sobre la conexión abierta

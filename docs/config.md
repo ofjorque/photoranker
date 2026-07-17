@@ -6,6 +6,7 @@ Ubicación: `~/.photoranker/config.toml`. Todos los parámetros documentados, co
 
 ```toml
 burst_threshold = 0.10        # distancia pHash normalizada (sobre 64 bits) para agrupar ráfagas — ver fase1-ingesta.md
+duplicate_threshold = 0.10    # distancia pHash normalizada para "posible duplicado" entre carpetas — ver fase8-mejoras-avanzadas.md (distancia 0.0 = hash idéntico, exacto)
 sigma_stop_threshold = 2.0     # convergencia individual del torneo — ver fase3-torneo.md
 convergence_fraction = 0.95    # fracción de imágenes activas que deben converger para detener la sesión
 stall_rounds = 20              # rondas sin mejora >5% antes de marcar stalled

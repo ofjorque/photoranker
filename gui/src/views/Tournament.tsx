@@ -7,7 +7,9 @@ import { t } from '@/i18n';
 import { RankingBoard } from '@/components/RankingBoard';
 import { QualityPanel } from '@/components/QualityPanel';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, ChevronLeft } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ChevronRight, ChevronLeft, Filter, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const QUALITY_PANEL_COLLAPSED_KEY = 'photoranker-quality-panel-collapsed';
@@ -22,13 +24,20 @@ export function TournamentView() {
   );
   const [focusedImageId, setFocusedImageId] = useState<number | null>(null);
 
-  const loadData = useCallback(async () => {
+  // Scope por subcarpeta (ver docs/fase8-mejoras-avanzadas.md, "Acotar el
+  // pool de torneo por subcarpeta") — `scopeInput` es lo que se está
+  // escribiendo, `activeScope` lo que efectivamente se aplicó al último
+  // tournament-next (no cambia mientras el usuario tipea, solo al confirmar).
+  const [scopeInput, setScopeInput] = useState('');
+  const [activeScope, setActiveScope] = useState<string | undefined>(undefined);
+
+  const loadData = useCallback(async (scope?: string) => {
     if (!project) return;
     setLoading(true);
     try {
       const [statusRes, groupRes] = await Promise.all([
         cli.tournamentStatus(project.dbPath).catch(() => null),
-        cli.tournamentNext(project.dbPath).catch(e => {
+        cli.tournamentNext(project.dbPath, scope).catch(e => {
           showToast(e instanceof CliError ? e.message : String(e), true);
           return null;
         })
@@ -42,8 +51,23 @@ export function TournamentView() {
   }, [project]);
 
   useEffect(() => {
-    loadData();
+    loadData(activeScope);
+    // Solo al montar — cambios posteriores de scope se disparan
+    // explícitamente desde handleApplyScope/handleClearScope, no acá.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadData]);
+
+  const handleApplyScope = () => {
+    const trimmed = scopeInput.trim();
+    setActiveScope(trimmed || undefined);
+    loadData(trimmed || undefined);
+  };
+
+  const handleClearScope = () => {
+    setScopeInput('');
+    setActiveScope(undefined);
+    loadData(undefined);
+  };
 
   const handlePanelToggle = () => {
     const next = !panelCollapsed;
@@ -56,7 +80,7 @@ export function TournamentView() {
     try {
       await cli.tournamentResult(project.dbPath, group.group_id, ranking);
       showToast(t('tournament.resultSent'));
-      await loadData();
+      await loadData(activeScope);
     } catch (e) {
       showToast(e instanceof CliError ? e.message : String(e), true);
     }
@@ -105,6 +129,32 @@ export function TournamentView() {
         ) : (
           <p className="text-destructive text-sm mb-4">{t('tournament.status.loadError')}</p>
         )}
+
+        <div className="flex items-end gap-2 mb-4">
+          <div className="space-y-1">
+            <Label htmlFor="tournament-scope-input" className="text-xs text-muted-foreground flex items-center gap-1">
+              <Filter className="w-3 h-3" />
+              {t('tournament.scope.label')}
+            </Label>
+            <Input
+              id="tournament-scope-input"
+              value={scopeInput}
+              onChange={(e) => setScopeInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleApplyScope()}
+              placeholder={t('tournament.scope.placeholder')}
+              className="h-8 w-56"
+            />
+          </div>
+          <Button variant="secondary" size="sm" onClick={handleApplyScope} disabled={loading}>
+            {t('tournament.scope.apply')}
+          </Button>
+          {activeScope && (
+            <Button variant="ghost" size="sm" onClick={handleClearScope} disabled={loading}>
+              <X className="w-3.5 h-3.5 mr-1" />
+              {t('tournament.scope.clear', { scope: activeScope })}
+            </Button>
+          )}
+        </div>
 
         {group ? (
           <h1 className="text-2xl font-bold">

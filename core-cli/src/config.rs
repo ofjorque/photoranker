@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 #[serde(default)]
 pub struct Config {
     pub burst_threshold: f64,
+    pub duplicate_threshold: f64,
     pub sigma_stop_threshold: f64,
     pub convergence_fraction: f64,
     pub stall_rounds: u32,
@@ -33,6 +34,7 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             burst_threshold: 0.10,
+            duplicate_threshold: 0.10,
             sigma_stop_threshold: 2.0,
             convergence_fraction: 0.95,
             stall_rounds: 20,

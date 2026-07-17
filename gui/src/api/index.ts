@@ -13,6 +13,7 @@ import type {
   ClusterRenameResult,
   ClusterRepresentativeImage,
   ClusterSummary,
+  DuplicateMatch,
   ExportXmpResult,
   FailedThumbnail,
   GetQualityMetricsResult,
@@ -121,8 +122,12 @@ export const cli = {
       ...dbArgs(dbPath),
     ]),
 
-  tournamentNext: (dbPath: string) =>
-    callCli<TournamentNextResult | null>(['tournament-next', ...dbArgs(dbPath)]),
+  tournamentNext: (dbPath: string, scope?: string) =>
+    callCli<TournamentNextResult | null>([
+      'tournament-next',
+      ...(scope ? ['--scope', scope] : []),
+      ...dbArgs(dbPath),
+    ]),
 
   tournamentResult: (dbPath: string, groupId: string, ranking: Array<[number, number]>) =>
     callCli<TournamentResultResult>([
@@ -171,6 +176,9 @@ export const cli = {
   exportXmp: (dbPath: string) => callCli<ExportXmpResult>(['export-xmp', ...dbArgs(dbPath)]),
 
   resyncGlobal: (path: string) => callCli<ResyncGlobalResult>(['resync-global', '--path', path]),
+
+  listDuplicates: (dbPath: string) =>
+    callCli<DuplicateMatch[]>(['list-duplicates', ...dbArgs(dbPath)]),
 
   variableCreate: (
     dbPath: string,

@@ -82,6 +82,10 @@ photoranker list-clusters
 # Solicitar el siguiente grupo de imágenes para comparar
 photoranker tournament-next
 
+# Igual, pero acotado a imágenes cuya ruta contenga "Día 1" (ver
+# fase8-mejoras-avanzadas.md, "Acotar el pool de torneo por subcarpeta")
+photoranker tournament-next --scope="Día 1"
+
 # Enviar el ranking del usuario (formato id:posición, permite empates)
 photoranker tournament-result --group-id abc123 --ranking 42:1 17:1 58:2 3:3 99:4
 
@@ -129,6 +133,12 @@ photoranker get-quality-metrics --image-id 42
 
 # Listar TODAS las imágenes de un cluster (no solo las representativas de list-clusters), con su probabilidad
 photoranker list-cluster-images --id 3
+
+# --- Fase 8: Mejoras avanzadas (ver fase8-mejoras-avanzadas.md) ---
+
+# Posibles duplicados entre esta carpeta y las demás ya sincronizadas al índice global
+photoranker list-duplicates
+photoranker list-duplicates --threshold 0.05
 ```
 
 ## Ver también

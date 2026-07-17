@@ -99,6 +99,18 @@ pub fn select_group(priority_ordered: &[Candidate], rng_seed: u64) -> Vec<i64> {
         .collect()
 }
 
+/// Arma un patrón `LIKE '%...%'` a partir de un substring de usuario,
+/// escapando `%`/`_`/`\` (los caracteres especiales de `LIKE`) para que un
+/// nombre de subcarpeta real que los contenga (ej. `"Viaje_2024"`) se
+/// compare literal, no como comodín.
+fn like_pattern(raw: &str) -> String {
+    let escaped = raw
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    format!("%{escaped}%")
+}
+
 fn rng_seed_from_clock() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -108,23 +120,49 @@ fn rng_seed_from_clock() -> u64 {
 /// `tournament-next`: arma el siguiente grupo (2-5 imágenes) y lo registra en
 /// `pending_tournament_groups`. `data=null` si queda menos de 2 imágenes
 /// activas disponibles (ver fase3-torneo.md, "Grupos incompletos").
-pub fn next(conn: &mut Connection) -> AppResult<Value> {
+///
+/// `scope` (ver docs/fase8-mejoras-avanzadas.md, "Acotar el pool de torneo
+/// por subcarpeta"): si viene, acota el pool a imágenes cuyo `file_path`
+/// contenga ese substring (ej. `--scope="Día 1"` matchea cualquier ruta que
+/// tenga "Día 1" en algún segmento) — no requiere que sea el nombre exacto
+/// de una subcarpeta ni conocer la carpeta raíz, que no se guarda aparte.
+/// Coincidencia sensible a mayúsculas/minúsculas (misma convención simple
+/// que el resto del filtrado por texto del proyecto). No afecta qué se
+/// sincroniza al índice global (`flush_pending_sync` sigue igual).
+pub fn next(conn: &mut Connection, scope: Option<&str>) -> AppResult<Value> {
     let priority_ordered: Vec<Candidate> = {
-        let mut stmt = conn.prepare(
-            "SELECT id, mu FROM images \
-             WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND thumbnail_status = 'ok' \
-             ORDER BY sigma DESC, \
+        let base_sql = "SELECT id, mu FROM images \
+             WHERE rejected = 0 AND stalled = 0 AND missing = 0 AND thumbnail_status = 'ok'";
+        let order_sql = " ORDER BY sigma DESC, \
                       CASE WHEN last_compared_at IS NULL THEN 0 ELSE 1 END ASC, \
-                      last_compared_at ASC",
-        )?;
-        stmt.query_map([], |row| {
-            Ok(Candidate {
-                id: row.get(0)?,
-                mu: row.get(1)?,
-            })
-        })?
-        .filter_map(|r| r.ok())
-        .collect()
+                      last_compared_at ASC";
+
+        match scope {
+            Some(scope) => {
+                let sql = format!("{base_sql} AND file_path LIKE ?1 ESCAPE '\\'{order_sql}");
+                let mut stmt = conn.prepare(&sql)?;
+                stmt.query_map(params![like_pattern(scope)], |row| {
+                    Ok(Candidate {
+                        id: row.get(0)?,
+                        mu: row.get(1)?,
+                    })
+                })?
+                .filter_map(|r| r.ok())
+                .collect()
+            }
+            None => {
+                let sql = format!("{base_sql}{order_sql}");
+                let mut stmt = conn.prepare(&sql)?;
+                stmt.query_map([], |row| {
+                    Ok(Candidate {
+                        id: row.get(0)?,
+                        mu: row.get(1)?,
+                    })
+                })?
+                .filter_map(|r| r.ok())
+                .collect()
+            }
+        }
     };
 
     let group_ids = select_group(&priority_ordered, rng_seed_from_clock());
@@ -379,9 +417,9 @@ pub(crate) fn flush_pending_sync(conn: &mut Connection, db_path: &Path) -> AppRe
             r.get(0)
         })?;
 
-    let rows: Vec<(i64, String, f64, i64)> = {
+    let rows: Vec<(i64, String, f64, i64, Option<String>)> = {
         let mut stmt = conn.prepare(
-            "SELECT p.image_id, i.file_path, p.mu, p.rejected \
+            "SELECT p.image_id, i.file_path, p.mu, p.rejected, i.hash \
              FROM pending_global_sync p JOIN images i ON i.id = p.image_id",
         )?;
         stmt.query_map([], |row| {
@@ -390,6 +428,7 @@ pub(crate) fn flush_pending_sync(conn: &mut Connection, db_path: &Path) -> AppRe
                 row.get::<_, String>(1)?,
                 row.get::<_, f64>(2)?,
                 row.get::<_, i64>(3)?,
+                row.get::<_, Option<String>>(4)?,
             ))
         })?
         .filter_map(|r| r.ok())
@@ -408,15 +447,24 @@ pub(crate) fn flush_pending_sync(conn: &mut Connection, db_path: &Path) -> AppRe
     loop {
         let outcome: rusqlite::Result<()> = (|| {
             let gtx = global_conn.transaction()?;
-            for (image_id, file_path, mu, rejected) in &rows {
+            for (image_id, file_path, mu, rejected, hash) in &rows {
                 gtx.execute(
                     "INSERT INTO global_ratings \
-                     (project_id, source_db_path, image_id, file_path, mu, rejected) \
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6) \
+                     (project_id, source_db_path, image_id, file_path, mu, rejected, hash) \
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) \
                      ON CONFLICT(project_id, image_id) DO UPDATE SET \
                         mu = excluded.mu, rejected = excluded.rejected, \
-                        source_db_path = excluded.source_db_path, updated_at = CURRENT_TIMESTAMP",
-                    params![project_id, db_path_str, image_id, file_path, mu, rejected],
+                        source_db_path = excluded.source_db_path, hash = excluded.hash, \
+                        updated_at = CURRENT_TIMESTAMP",
+                    params![
+                        project_id,
+                        db_path_str,
+                        image_id,
+                        file_path,
+                        mu,
+                        rejected,
+                        hash
+                    ],
                 )?;
             }
             gtx.commit()

@@ -248,3 +248,13 @@ export interface VariableValueEntry {
   file_path: string;
   value: number | null;
 }
+
+export interface DuplicateMatch {
+  local_image_id: number;
+  local_file_path: string;
+  other_project_id: string;
+  other_file_path: string;
+  other_source_db_path: string | null;
+  distance: number;
+  exact: boolean;
+}

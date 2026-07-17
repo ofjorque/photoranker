@@ -57,6 +57,11 @@ pub enum AppError {
 
     #[error("Error interno de TrueSkill: {0}")]
     TrueSkillError(String),
+
+    #[error(
+        "No se pudo escribir: otro proceso está usando esta carpeta ahora mismo. Reintentá en un momento."
+    )]
+    DbLocked,
 }
 
 impl From<quick_xml::Error> for AppError {
@@ -86,6 +91,7 @@ impl AppError {
             AppError::XmpParseError(_) => "XMP_PARSE_ERROR",
             AppError::NothingToUndo => "NOTHING_TO_UNDO",
             AppError::TrueSkillError(_) => "TRUESKILL_ERROR",
+            AppError::DbLocked => "DB_LOCKED",
         }
     }
 }

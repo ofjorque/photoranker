@@ -5,15 +5,16 @@
 import { useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { cli, CliError, extractLogStatus } from '@/api';
+import type { DuplicateMatch } from '@/api/types';
 import { getProject, setProject, dbPathFor } from '@/state';
 import { showToast } from '@/toast';
 import { navigate } from '@/router';
 import { t } from '@/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { FolderOpen, Undo2, Database, RefreshCw, Layers, Trophy } from 'lucide-react';
+import { FolderOpen, Undo2, Database, RefreshCw, Layers, Trophy, Copy } from 'lucide-react';
 import { confirmDialog } from '@/components/ConfirmDialog';
 import { showLoadingOverlay } from '@/components/LoadingOverlay';
 import { Html } from '@/components/Html';
@@ -33,6 +34,8 @@ export function HomeView() {
   const [folderInput, setFolderInput] = useState(project?.folderPath ?? '');
   const [isBusy, setIsBusy] = useState(false);
   const [result, setResult] = useState<{ title: string; data: unknown } | null>(null);
+  const [duplicates, setDuplicates] = useState<DuplicateMatch[] | null>(null);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
 
   const handlePickFolder = async () => {
     const picked = await invoke<string | null>('pick_folder');
@@ -99,6 +102,24 @@ export function HomeView() {
       showToast(e instanceof CliError ? e.message : String(e), true);
     } finally {
       setIsBusy(false);
+    }
+  };
+
+  const handleFindDuplicates = async () => {
+    if (!project) return;
+    setDuplicatesLoading(true);
+    try {
+      const data = await cli.listDuplicates(project.dbPath);
+      setDuplicates(data);
+      showToast(
+        data.length === 0
+          ? t('home.duplicates.none')
+          : t('home.duplicates.found', { count: data.length }),
+      );
+    } catch (e) {
+      showToast(e instanceof CliError ? e.message : String(e), true);
+    } finally {
+      setDuplicatesLoading(false);
     }
   };
 
@@ -178,7 +199,39 @@ export function HomeView() {
           )}
         </TabsContent>
 
-        <TabsContent value="maintenance">
+        <TabsContent value="maintenance" className="space-y-6">
+          {project && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">{t('home.duplicates.title')}</CardTitle>
+                <CardDescription>{t('home.duplicates.description')}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button variant="outline" disabled={duplicatesLoading} onClick={handleFindDuplicates}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  {t('home.duplicates.button')}
+                </Button>
+                {duplicates && duplicates.length > 0 && (
+                  <ul className="space-y-2">
+                    {duplicates.map((d, i) => (
+                      <li key={i} className="text-sm bg-muted/50 rounded-md px-3 py-2 flex items-center justify-between gap-4">
+                        <span className="truncate" title={`${d.local_file_path} ↔ ${d.other_file_path}`}>
+                          {t('home.duplicates.row', {
+                            local: d.local_file_path.split(/[\\/]/).pop() ?? d.local_file_path,
+                            other: d.other_file_path,
+                          })}
+                        </span>
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {d.exact ? t('home.duplicates.exact') : t('home.duplicates.similar', { pct: (d.distance * 100).toFixed(0) })}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {result ? (
             <Card className="bg-muted">
               <CardHeader>

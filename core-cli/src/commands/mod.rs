@@ -1,6 +1,7 @@
 pub mod burst_detect;
 pub mod burst_tournament;
 pub mod cluster;
+pub mod duplicates;
 pub mod export_xmp;
 pub mod init;
 pub mod prune;

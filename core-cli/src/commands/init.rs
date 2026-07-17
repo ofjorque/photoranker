@@ -250,7 +250,7 @@ fn ensure_project_meta(tx: &rusqlite::Transaction, config: &Config) -> AppResult
 pub fn run(scan_path: &Path, config: &Config) -> AppResult<serde_json::Value> {
     tracing::info!(path = %scan_path.display(), "escaneando carpeta");
     let db_path = scan_path.join(db::LOCAL_DB_FILENAME);
-    let mut conn = db::open_local(&db_path)?;
+    let (mut conn, _lock) = db::open_local_locked(&db_path)?;
 
     let existing = existing_file_paths(&conn)?;
     let all_files = scan_files(scan_path, &config.exclude_dirs);

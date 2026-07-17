@@ -8,6 +8,7 @@ mod config;
 mod db;
 mod error;
 mod exif;
+mod lock;
 mod phash;
 mod quality;
 mod thumbnail;
@@ -196,6 +197,9 @@ enum Commands {
     /// Arma el siguiente grupo de comparación del torneo principal.
     #[command(name = "tournament-next")]
     TournamentNext {
+        /// Acota el pool a imágenes cuyo file_path contenga este texto (ej. "Día 1").
+        #[arg(long)]
+        scope: Option<String>,
         #[arg(long)]
         db: Option<PathBuf>,
     },
@@ -279,6 +283,15 @@ enum Commands {
         #[arg(long)]
         path: PathBuf,
     },
+    /// Lista posibles duplicados entre esta carpeta y las demás ya sincronizadas al índice global.
+    #[command(name = "list-duplicates")]
+    ListDuplicates {
+        /// Distancia pHash normalizada máxima. Default: `duplicate_threshold` de config.toml.
+        #[arg(long)]
+        threshold: Option<f64>,
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
 }
 
 fn parse_id_number_pairs(raw: &[String], arg_name: &str) -> AppResult<Vec<(i64, f64)>> {
@@ -328,18 +341,18 @@ fn run(cli: Cli) -> AppResult<Value> {
         }
         Commands::Prune { db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::prune::run(&mut conn, &db_path)
         }
         Commands::Rehash { db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::rehash::run(&mut conn)
         }
         Commands::BurstDetect { threshold, db } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::burst_detect::run(&mut conn, threshold.unwrap_or(cfg.burst_threshold))
         }
         Commands::ListBursts { db } => {
@@ -353,7 +366,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             db,
         } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             let pairs = parse_id_number_pairs(&ranking, "ranking")?
                 .into_iter()
                 .map(|(id, pos)| (id, pos as i64))
@@ -366,7 +379,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             db,
         } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::burst_detect::exclude(&mut conn, burst_id, &image_id)
         }
         Commands::BurstUndo {
@@ -375,7 +388,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             db,
         } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::burst_detect::undo(&mut conn, &db_path, burst_id, image_id.as_deref())
         }
         Commands::ListBurstsResolved { db } => {
@@ -392,7 +405,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             db,
         } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             let cats = match &categories {
                 Some(raw) => parse_categories(raw)?,
                 None => Vec::new(),
@@ -410,13 +423,13 @@ fn run(cli: Cli) -> AppResult<Value> {
             db,
         } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             let pairs = parse_id_number_pairs(&values, "values")?;
             commands::variable::set(&mut conn, &variable, &pairs)
         }
         Commands::VariableDelete { variable, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::variable::delete(&mut conn, &db_path, &variable)
         }
         Commands::GetVariableValues { variable, db } => {
@@ -426,7 +439,7 @@ fn run(cli: Cli) -> AppResult<Value> {
         }
         Commands::VariableTag { variable, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::variable_tag::run(&mut conn, &variable)
         }
         Commands::Cluster {
@@ -442,7 +455,7 @@ fn run(cli: Cli) -> AppResult<Value> {
             }
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             if preview {
                 commands::cluster::preview(&conn, &db_path, &cfg)
             } else {
@@ -461,13 +474,13 @@ fn run(cli: Cli) -> AppResult<Value> {
         }
         Commands::ClusterRename { id, name, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::cluster::rename(&mut conn, id, &name)
         }
-        Commands::TournamentNext { db } => {
+        Commands::TournamentNext { scope, db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
-            commands::tournament::next(&mut conn)
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
+            commands::tournament::next(&mut conn, scope.as_deref())
         }
         Commands::TournamentResult {
             group_id,
@@ -476,7 +489,7 @@ fn run(cli: Cli) -> AppResult<Value> {
         } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             let pairs = parse_id_number_pairs(&ranking, "ranking")?
                 .into_iter()
                 .map(|(id, pos)| (id, pos as i64))
@@ -485,24 +498,24 @@ fn run(cli: Cli) -> AppResult<Value> {
         }
         Commands::Ranking { db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::tournament::ranking(&mut conn, &db_path)
         }
         Commands::TournamentUndo { db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::tournament::undo(&mut conn, &db_path)
         }
         Commands::TournamentReset { db } => {
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::tournament::reset(&mut conn, &db_path)
         }
         Commands::ResetGlobalIndex => commands::resync_global::reset_global_index(),
         Commands::TournamentStatus { db } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::tournament::status(&mut conn, &db_path, &cfg)
         }
         Commands::ListFailedThumbnails { db } => {
@@ -513,7 +526,7 @@ fn run(cli: Cli) -> AppResult<Value> {
         Commands::RetryThumbnail { image_id, db } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::thumbnails::retry(&mut conn, &cfg, image_id)
         }
         Commands::GetThumbnail { image_id, db } => {
@@ -529,10 +542,21 @@ fn run(cli: Cli) -> AppResult<Value> {
         Commands::ExportXmp { db } => {
             let cfg = config::load_or_init()?;
             let db_path = db::resolve_local_db_path(db.as_deref())?;
-            let mut conn = db::open_local(&db_path)?;
+            let (mut conn, _lock) = db::open_local_locked(&db_path)?;
             commands::export_xmp::run(&mut conn, &db_path, &cfg)
         }
         Commands::ResyncGlobal { path } => commands::resync_global::run(&path),
+        Commands::ListDuplicates { threshold, db } => {
+            let cfg = config::load_or_init()?;
+            let db_path = db::resolve_local_db_path(db.as_deref())?;
+            let local_conn = db::open_local(&db_path)?;
+            let global_conn = db::open_global()?;
+            commands::duplicates::list(
+                &local_conn,
+                &global_conn,
+                threshold.unwrap_or(cfg.duplicate_threshold),
+            )
+        }
     }
 }
 
