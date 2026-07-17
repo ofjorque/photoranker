@@ -1,6 +1,6 @@
 [package]
 name = "gui"
-version = "0.1.0"
+version = "0.1.1"
 description = "GUI de escritorio de PhotoRanker (Tauri) — envoltura visual del CLI, sin lógica propia"
 authors = ["Felrac <ofjorque@gmail.com>"]
 edition = "2024"

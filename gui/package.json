@@ -1,7 +1,7 @@
 {
   "name": "gui",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "GUI de escritorio de PhotoRanker (Tauri) — envoltura visual del CLI, sin lógica propia",
   "author": "Felrac <ofjorque@gmail.com>",
   "license": "GPL-3.0-only",
