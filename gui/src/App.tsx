@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TitleBar } from '@/components/TitleBar';
+import { AppMenu } from '@/components/AppMenu';
 import { initLanguage, onLanguageChange, t } from '@/i18n';
 import { loadTheme } from '@/theme';
 import { currentRoute, navigate, onRouteChange, type Route } from '@/router';
@@ -105,8 +106,9 @@ export function App() {
   ];
 
   return (
-    <div className="h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground">
+    <div className="relative h-screen w-screen flex flex-col overflow-hidden bg-background text-foreground">
       <TitleBar />
+      <AppMenu />
       {/* `transform` (sin valores) crea un "containing block" para el
           `position:fixed` que usa <Sidebar> internamente en desktop — sin
           esto, el sidebar se posiciona contra la ventana completa y queda

@@ -20,6 +20,21 @@ export const en: Record<string, string> = {
   'main.nav.toggleCollapse': 'Collapse/expand menu',
   'main.nav.noProject': 'No project open',
 
+  // components/AppMenu — hidden menu bar (appears on pressing F10)
+  'appMenu.file': 'File',
+  'appMenu.file.newProject': 'New project',
+  'appMenu.file.settings': 'Settings',
+  'appMenu.file.exit': 'Exit',
+  'appMenu.view': 'View',
+  'appMenu.help': 'Help',
+  'appMenu.help.about': 'About PhotoRanker',
+  'appMenu.help.repo': 'GitHub repository',
+  'appMenu.help.reportIssue': 'Report an issue',
+  'appMenu.about.description':
+    'Quantitative photo curation: groups, ranks (TrueSkill) and exports to XMP, no black boxes.',
+  'appMenu.about.version': 'Version {version}',
+  'appMenu.about.license': 'GPL-3.0 license',
+
   // common (continued)
   'common.save': 'Save',
 

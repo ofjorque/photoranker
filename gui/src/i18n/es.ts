@@ -23,6 +23,21 @@ export const es: Record<string, string> = {
   'main.nav.toggleCollapse': 'Colapsar/expandir menú',
   'main.nav.noProject': 'Ningún proyecto abierto',
 
+  // components/AppMenu — barra de menú oculta (aparece al presionar F10)
+  'appMenu.file': 'Archivo',
+  'appMenu.file.newProject': 'Nuevo proyecto',
+  'appMenu.file.settings': 'Configuración',
+  'appMenu.file.exit': 'Salir',
+  'appMenu.view': 'Ver',
+  'appMenu.help': 'Ayuda',
+  'appMenu.help.about': 'Acerca de PhotoRanker',
+  'appMenu.help.repo': 'Repositorio en GitHub',
+  'appMenu.help.reportIssue': 'Reportar un problema',
+  'appMenu.about.description':
+    'Curación fotográfica cuantitativa: agrupa, rankea (TrueSkill) y exporta a XMP, sin cajas negras.',
+  'appMenu.about.version': 'Versión {version}',
+  'appMenu.about.license': 'Licencia GPL-3.0',
+
   // common (siguen)
   'common.save': 'Guardar',
 
@@ -37,10 +52,10 @@ export const es: Record<string, string> = {
   'settings.appearance.accentColor': 'Color de acento',
   'settings.appearance.reset': 'Restablecer',
   'settings.appearance.customThemeNotice':
-    'Ya tenés un archivo de tema personalizado en <code>{path}</code>. Guardar acá lo va a reemplazar por el generado desde esta pantalla.',
+    'Ya tienes un archivo de tema personalizado en <code>{path}</code>. Guardar acá lo va a reemplazar por el generado desde esta pantalla.',
   'settings.appearance.replaceCustomTitle': 'Reemplazar tema personalizado',
   'settings.appearance.replaceCustomMessage':
-    'Ya tenés un archivo de tema en "{path}" que no fue generado por esta pantalla. Guardar acá lo va a reemplazar.',
+    'Ya tienes un archivo de tema en "{path}" que no fue generado por esta pantalla. Guardar acá lo va a reemplazar.',
   'settings.appearance.replaceCustomConfirm': 'Reemplazar y guardar',
   'settings.appearance.accentWarning':
     'Este acento queda muy parecido al rojo de "peligro" (usado en botones destructivos, como reiniciar el torneo o vaciar el índice global) — te va a costar distinguirlos a simple vista.',
@@ -87,7 +102,7 @@ export const es: Record<string, string> = {
   'lightbox.zoomIn': 'Acercar',
 
   // common (siguen)
-  'common.openProjectFirst': 'Abrí un proyecto primero.',
+  'common.openProjectFirst': 'Abre un proyecto primero.',
   'common.loading': 'Cargando…',
   'common.refresh': 'Actualizar',
   'common.remove': 'Quitar',
@@ -111,7 +126,7 @@ export const es: Record<string, string> = {
   'tournament.groupHeading': 'Grupo {groupId}…',
   'tournament.quality.toggleTitle': 'Colapsar/expandir panel de calidad',
   'tournament.quality.title': 'Panel de calidad',
-  'tournament.quality.focusHint': 'Enfocá una imagen…',
+  'tournament.quality.focusHint': 'Enfoca una imagen…',
   'tournament.resultSent': 'Resultado enviado',
 
   // views/Export
@@ -142,16 +157,16 @@ export const es: Record<string, string> = {
   'bursts.loadingPending': 'Cargando ráfagas pendientes…',
   'bursts.title': 'Ráfagas',
   'bursts.noPending':
-    'No hay ráfagas pendientes de minitorneo. Corré <code>burst-detect</code> en la pantalla de Proyecto si agregaste fotos nuevas.',
+    'No hay ráfagas pendientes de minitorneo. Corre <code>burst-detect</code> en la pantalla de Proyecto si agregaste fotos nuevas.',
   'bursts.heading': 'Ráfaga #{id}',
   'bursts.pending.one': 'pendiente',
   'bursts.pending.other': 'pendientes',
   'bursts.instructions':
-    'Ordená de mejor a peor con el teclado. La ganadora (posición 1) se conserva; el resto queda marcado como <code>rejected</code>.',
+    'Ordena de mejor a peor con el teclado. La ganadora (posición 1) se conserva; el resto queda marcado como <code>rejected</code>.',
   'bursts.exclude.question': '¿Alguna de estas fotos no es parte de la ráfaga?',
   'bursts.exclude.notBurst': 'no es burst',
   'bursts.exclude.button': 'Excluir seleccionadas',
-  'bursts.exclude.needSelection': 'Seleccioná al menos una foto para excluir',
+  'bursts.exclude.needSelection': 'Selecciona al menos una foto para excluir',
   'bursts.exclude.dissolved': 'Ráfaga #{id} disuelta (quedaba solo 1 imagen)',
   'bursts.exclude.excluded': '{count} imagen(es) excluida(s) de la ráfaga #{id}',
   'bursts.exclude.contextMenu.undo': 'Deshacer exclusión',
@@ -170,7 +185,7 @@ export const es: Record<string, string> = {
   'cluster.phase.assigning': 'Asignando cada imagen a su cluster…',
   'cluster.phase.saving': 'Guardando resultados…',
   'cluster.list.loading': 'Cargando clusters…',
-  'cluster.list.empty': 'Todavía no hay clusters comprometidos — corré <code>cluster --k</code> arriba.',
+  'cluster.list.empty': 'Todavía no hay clusters comprometidos — corre <code>cluster --k</code> arriba.',
   'cluster.card.unnamed': 'Cluster {id}',
   'cluster.card.photoCount': '{count} fotos',
   'cluster.card.namePlaceholder': 'Nombre del cluster',
@@ -230,15 +245,15 @@ export const es: Record<string, string> = {
   'home.actions.gotoTournament': 'Ir a torneo →',
   'home.dangerZone.title': 'Deshacer / reiniciar torneo',
   'home.dangerZone.description':
-    'Por si te equivocaste al mandar un grupo, o querés volver a empezar el torneo de esta carpeta desde cero.',
+    'Por si te equivocaste al mandar un grupo, o quieres volver a empezar el torneo de esta carpeta desde cero.',
   'home.dangerZone.undo': 'tournament-undo (deshacer último grupo)',
   'home.dangerZone.reset': 'tournament-reset (reiniciar esta carpeta)',
   'home.globalIndex.title': 'Índice global',
   'home.globalIndex.description':
-    'Operaciones sobre <code>global_index.sqlite</code> — afectan a <strong>todas</strong> tus carpetas. Úsalas solo si sabés lo que hacen.',
+    'Operaciones sobre <code>global_index.sqlite</code> — afectan a <strong>todas</strong> tus carpetas. Úsalas solo si sabes lo que hacen.',
   'home.globalIndex.resyncTitle': 'Repara las rutas en el índice si moviste esta carpeta',
   'home.globalIndex.resetTitle': 'Vacía el índice global completo',
-  'home.folder.needFolder': 'Elegí una carpeta primero',
+  'home.folder.needFolder': 'Elige una carpeta primero',
   'home.init.loadingTitle': 'Inicializando carpeta…',
   'home.init.pairedNote': ', {count} pares RAW+JPEG fusionados',
   'home.init.result': 'init: {ok} nuevas, {existing} ya existentes, {failed} fallidas{pairedNote}',
@@ -283,7 +298,7 @@ export const es: Record<string, string> = {
   'variables.list.title': 'Variables definidas',
   'variables.classify.title': 'Clasificación visual',
   'variables.classify.description':
-    'Recorré las fotos activas una por una y asigná el valor con el teclado — misma mecánica que el torneo.',
+    'Recorre las fotos activas una por una y asigna el valor con el teclado — misma mecánica que el torneo.',
   'variables.field.variable': 'Variable',
   'variables.classify.start': 'Empezar',
   'variables.classify.gridMode': 'Vista en grilla',
@@ -298,7 +313,7 @@ export const es: Record<string, string> = {
   'variables.create.nameRequired': 'El nombre es obligatorio',
   'variables.create.created': 'Variable "{name}" creada',
   'variables.create.createdMany': '{count} variables creadas',
-  'variables.classify.needVariable': 'Elegí una variable',
+  'variables.classify.needVariable': 'Elige una variable',
   'variables.classify.noActiveImages': 'No hay imágenes activas para clasificar.',
   'variables.classifier.hint':
     '<kbd>&larr;</kbd> anterior · <kbd>&rarr;</kbd>/<kbd>Espacio</kbd> siguiente (sin asignar) · números asignan y avanzan · <kbd>Backspace</kbd> retrocede · <kbd>Esc</kbd> cerrar',
@@ -325,7 +340,7 @@ export const es: Record<string, string> = {
   'variables.tabs.cards': 'Tarjetas',
   'variables.cards.title': 'Fotos × variables',
   'variables.cards.description': 'Todas las fotos activas con el valor de cada variable personalizada.',
-  'variables.cards.noVariables': 'Todavía no hay variables creadas — armá una en la pestaña "Armar variables".',
+  'variables.cards.noVariables': 'Todavía no hay variables creadas — arma una en la pestaña "Armar variables".',
   'variables.cards.empty': 'No hay fotos activas para mostrar.',
 
   // Drawer de detalles de foto (Export/Bursts/Cluster)
@@ -334,12 +349,12 @@ export const es: Record<string, string> = {
   'photoDetails.close': 'Cerrar',
 
   // Constructor de variables por drag-and-drop
-  'variableBuilder.intro': 'Arrastrá un tipo de variable a la zona de abajo para empezar.',
+  'variableBuilder.intro': 'Arrastra un tipo de variable a la zona de abajo para empezar.',
   'variableBuilder.block.ordinal.title': 'Ordinal',
   'variableBuilder.block.ordinal.description': 'Escala numérica (ej. 1 a 5)',
   'variableBuilder.block.nominal.title': 'Nominal',
   'variableBuilder.block.nominal.description': 'Categorías con nombre',
-  'variableBuilder.dropzone.empty': 'Soltá acá un tipo de variable',
+  'variableBuilder.dropzone.empty': 'Suelta acá un tipo de variable',
   'variableBuilder.dropzone.configuring': 'Configurando variable {type}',
   'variableBuilder.changeType': 'Cambiar tipo',
   'variableBuilder.addToQueue': 'Agregar a la lista',
